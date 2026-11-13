@@ -85,7 +85,7 @@ mod tests {
     use tokio_rusqlite::rusqlite::{Connection, params};
 
     use super::guardar_dia;
-    use crate::test_support::conexion;
+    use crate::test_support::{conexion, conexion_heredada};
 
     fn dia() -> NaiveDate {
         NaiveDate::from_ymd_opt(2026, 10, 27).unwrap()
@@ -150,7 +150,8 @@ mod tests {
 
     #[test]
     fn duplicados_heredados_se_respetan_si_no_cambian_y_se_fusionan_al_editar() {
-        let mut c = conexion();
+        // A database copied from the VPS before migration 001 may still have duplicates.
+        let mut c = conexion_heredada();
         vender(&c, 1, 1, 1, 1.0);
         vender(&c, 1, 1, 1, 1.0);
         // The editor shows the sum (2): saving it untouched writes nothing.
@@ -159,6 +160,27 @@ mod tests {
         // Editing merges both rows into one.
         assert_eq!(guardar_dia(&mut c, 1, dia(), &[(1, 5)]).unwrap(), Some(1));
         assert_eq!(celda(&c, 1, 1), vec![(5, 1.5, 7.5)]);
+    }
+
+    #[test]
+    fn con_el_indice_unique_guardar_varias_veces_mantiene_una_fila_por_celda() {
+        let mut c = conexion();
+        for cantidad in [1, 3, 2] {
+            guardar_dia(&mut c, 1, dia(), &[(1, cantidad)]).unwrap();
+        }
+        assert_eq!(celda(&c, 1, 1), vec![(2, 1.5, 3.0)]);
+    }
+
+    #[test]
+    fn la_base_rechaza_un_duplicado_insertado_por_fuera_de_la_app() {
+        let c = conexion();
+        vender(&c, 1, 1, 1, 1.5);
+        let duplicado = c.execute(
+            "INSERT INTO consumos (id_estudiante, id_producto, cantidad, precio_unitario_venta, fecha_consumo)
+             VALUES (1, 1, 1, 1.5, '2026-10-27')",
+            [],
+        );
+        assert!(duplicado.is_err());
     }
 
     #[test]

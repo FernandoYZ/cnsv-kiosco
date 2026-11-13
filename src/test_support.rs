@@ -47,6 +47,8 @@ CREATE TABLE pagos (
 );
 CREATE INDEX idx_consumos_estudiante_fecha ON consumos(id_estudiante, fecha_consumo);
 CREATE INDEX idx_pagos_estudiante_fecha ON pagos(id_estudiante, fecha_pago);
+CREATE INDEX idx_estudiantes_activo ON estudiantes(esta_activo) WHERE esta_activo = 1;
+CREATE INDEX idx_estudiantes_apellido_nombre ON estudiantes(apellidos, nombres);
 "#;
 
 /// Known dataset:
@@ -61,7 +63,18 @@ INSERT INTO productos VALUES (1,'Gelatina',1.5,1), (2,'Broaster',5,1), (3,'Antig
 INSERT INTO estudiantes VALUES (1,'Ana','Alva',3,1), (2,'Luis','Bravo',7,1), (3,'Rosa','Baja',3,0);
 "#;
 
+/// The real migration file, so tests run against the migrated schema.
+pub const MIGRACION_001: &str = include_str!("../migrations/001_consumos_unique.sql");
+
+/// Current production schema: legacy schema + migration 001 (UNIQUE cell index).
 pub fn preparar(c: &Connection) {
+    preparar_heredada(c);
+    c.execute_batch(MIGRACION_001).expect("migration 001");
+}
+
+/// Schema as it was before migration 001 (duplicates allowed), for tests
+/// that check the code still copes with a database copied from the VPS.
+pub fn preparar_heredada(c: &Connection) {
     c.execute_batch(ESQUEMA).expect("schema");
     c.execute_batch(DATOS).expect("seed");
     c.pragma_update(None, "foreign_keys", "ON").expect("pragma");
@@ -70,6 +83,12 @@ pub fn preparar(c: &Connection) {
 pub fn conexion() -> Connection {
     let c = Connection::open_in_memory().expect("in-memory db");
     preparar(&c);
+    c
+}
+
+pub fn conexion_heredada() -> Connection {
+    let c = Connection::open_in_memory().expect("in-memory db");
+    preparar_heredada(&c);
     c
 }
 
