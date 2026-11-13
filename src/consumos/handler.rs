@@ -18,9 +18,7 @@ use crate::{
     productos::{self, Producto},
     state::AppState,
     templates::{
-        components::{
-            Icono, avatar, bottom_nav, estado_vacio, icono, ios_nav, mensaje_flash, monto,
-        },
+        components::{Icono, avatar, estado_vacio, icono, ios_nav, mensaje_flash, monto},
         layout,
     },
 };
@@ -106,23 +104,24 @@ pub async fn inicio() -> Markup {
         "Registro de Consumos",
         None,
         html! {
-            (bottom_nav())
             nav class="ios-nav" {
                 div class="mx-auto flex max-w-5xl items-center justify-between" {
                     a href="/" class="text-[15px] font-bold tracking-tight text-gray-900" { "Kiosco " span class="text-ios-blue" { "del Valle" } }
-                    a href="/" class="ios-link text-[15px] font-medium" { "Ver semana" }
+                    a href="/" class="ios-link text-[15px] font-medium" {
+                        span { "Inicio" }
+                        (icono(Icono::Inicio, "ml-2 h-5 w-5"))
+                    }
                 }
             }
-            main class="mx-auto max-w-5xl px-6 pt-12 pb-32 sm:pb-10" {
+            main class="mx-auto max-w-5xl px-6 pt-12 pb-10" {
                 header class="mb-12" {
                     h1 class="text-[34px] leading-tight font-extrabold tracking-tight text-gray-900" { "Registro de Consumos" }
                     p class="mt-2 text-[19px] font-medium text-ios-gray" { "Selecciona el área de trabajo para hoy" }
                 }
-                div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4" {
+                div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3" {
                     (tarjeta("/registro/menor", Icono::Estudiantes, "bg-indigo-50 text-indigo-600 group-active:bg-indigo-600 group-active:text-white", "Sector Menor", html! { "Primaria y Bajos" br; "Secundaria" }, true))
                     (tarjeta("/registro/mayor", Icono::Estudiantes, "bg-blue-50 text-blue-600 group-active:bg-blue-600 group-active:text-white", "Sector Mayor", html! { "3ro a 5to de" br; "Secundaria" }, true))
-                    (tarjeta("/productos", Icono::Productos, "bg-orange-50 text-orange-600 group-active:bg-orange-600 group-active:text-white", "Productos", html! { "Configurar precios" br; "y catálogo" }, false))
-                    (tarjeta("/estudiantes", Icono::Persona, "bg-emerald-50 text-emerald-600 group-active:bg-emerald-600 group-active:text-white", "Estudiantes", html! { "Altas, bajas" br; "y cambios de grado" }, false))
+                    (tarjeta("/productos", Icono::Productos, "bg-orange-50 text-orange-600 group-active:bg-orange-600 group-active:text-white", "Productos", html! { "Configurar precios" br; "y existencias" }, false))
                 }
             }
         },

@@ -28,8 +28,8 @@ const MESES: [&str; 12] = [
     "diciembre",
 ];
 
-/// Days always shown: Monday to Friday. Saturday and Sunday appear only with data.
-const DIAS_HABILES: usize = 5;
+/// Days always shown: Monday to Saturday, as the Go app. Sunday appears only with data.
+const DIAS_HABILES: usize = 6;
 
 /// Today in the server's local time zone (set `TZ=America/Lima` in systemd).
 pub fn hoy() -> NaiveDate {
@@ -94,43 +94,54 @@ pub fn larga(fecha: NaiveDate) -> String {
 
 /// `Lunes - 09/11`, used by the day selector.
 pub fn opcion_dia(fecha: NaiveDate) -> String {
-    let dia = DIAS_LARGOS[indice_dia(fecha)];
-    let mut letras = dia.chars();
-    let capitalizado: String = letras
-        .next()
-        .map(|c| c.to_uppercase().chain(letras).collect())
-        .unwrap_or_default();
-    format!("{capitalizado} - {}", fecha.format("%d/%m"))
-}
-
-/// (`9 noviembre`, `13 noviembre, 2026`) for the weekly header.
-pub fn rango_semana(lunes: NaiveDate) -> (String, String) {
-    let viernes = sumar_dias(lunes, 4);
-    (
-        format!("{} {}", lunes.day(), mes(lunes)),
-        format!("{} {}, {}", viernes.day(), mes(viernes), viernes.year()),
+    format!(
+        "{} - {}",
+        capitalizar(DIAS_LARGOS[indice_dia(fecha)]),
+        fecha.format("%d/%m")
     )
 }
 
-/// `Semana del 9 al 13 de noviembre`
+fn capitalizar(texto: &str) -> String {
+    let mut letras = texto.chars();
+    letras
+        .next()
+        .map(|c| c.to_uppercase().chain(letras).collect())
+        .unwrap_or_default()
+}
+
+/// Last day of the kiosk week (Saturday).
+fn sabado(lunes: NaiveDate) -> NaiveDate {
+    sumar_dias(lunes, 5)
+}
+
+/// (`26 Octubre`, `31 Octubre, 2026`) for the weekly header, as the Go app.
+pub fn rango_semana(lunes: NaiveDate) -> (String, String) {
+    let fin = sabado(lunes);
+    (
+        format!("{} {}", lunes.day(), capitalizar(mes(lunes))),
+        format!("{} {}, {}", fin.day(), capitalizar(mes(fin)), fin.year()),
+    )
+}
+
+/// `Semana del 26 al 31 de Octubre`
 pub fn etiqueta_semana(lunes: NaiveDate) -> String {
-    let viernes = sumar_dias(lunes, 4);
+    let fin = sabado(lunes);
     format!(
         "Semana del {} al {} de {}",
         lunes.day(),
-        viernes.day(),
-        mes(viernes)
+        fin.day(),
+        capitalizar(mes(fin))
     )
 }
 
-/// `9-13/noviembre/2026`, used in the receipt.
+/// `26-31/Octubre/2026`, used in the receipt.
 pub fn periodo(lunes: NaiveDate) -> String {
-    let viernes = sumar_dias(lunes, 4);
+    let fin = sabado(lunes);
     format!(
         "{}-{}/{}/{}",
         lunes.day(),
-        viernes.day(),
-        mes(viernes),
-        viernes.year()
+        fin.day(),
+        capitalizar(mes(fin)),
+        fin.year()
     )
 }

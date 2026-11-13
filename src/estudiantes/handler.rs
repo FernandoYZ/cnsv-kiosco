@@ -12,7 +12,7 @@ use crate::{
     forms,
     state::AppState,
     templates::{
-        components::{Icono, avatar, bottom_nav, encabezado, estado_vacio, ios_nav, mensaje_flash},
+        components::{Icono, avatar, encabezado, estado_vacio, ios_nav, mensaje_flash},
         layout,
     },
 };
@@ -171,7 +171,7 @@ fn fila(e: &Estudiante, filtro: Option<i64>) -> Markup {
                 }
             }
             div class="flex shrink-0 items-center gap-1" {
-                a href=(editar) class="btn-text text-ios-blue hover:bg-blue-50" { "Editar" }
+                a href=(editar) data-replace class="btn-text text-ios-blue hover:bg-blue-50" { "Editar" }
                 form method="post" action=(format!("/estudiantes/{}/estado", e.id))
                     data-confirm=[e.esta_activo.then(|| format!("¿Desactivar a {}?", e.nombres))] {
                     input type="hidden" name="activo" value=(if e.esta_activo { "0" } else { "1" });
@@ -216,7 +216,7 @@ fn fila_edicion(e: &Estudiante, filtro: Option<i64>) -> Markup {
                 }
                 div class="flex gap-3" {
                     button type="submit" class="flex-1 rounded-xl bg-ios-blue py-3 font-bold text-white shadow-md transition-all active:scale-95" { "Guardar Cambios" }
-                    a href=(cancelar) class="rounded-xl border border-gray-200 bg-white px-6 py-3 font-semibold text-gray-600 transition-all active:scale-95" { "Cancelar" }
+                    a href=(cancelar) data-replace class="rounded-xl border border-gray-200 bg-white px-6 py-3 font-semibold text-gray-600 transition-all active:scale-95" { "Cancelar" }
                 }
             }
         }
@@ -236,9 +236,8 @@ fn vista(
         "Estudiantes",
         flash,
         html! {
-            (bottom_nav())
             (ios_nav(("/", "Atrás"), "Configuración", html! {}))
-            main class="mx-auto max-w-2xl px-4 pt-8 pb-32 sm:pb-10 lg:max-w-6xl" {
+            main class="mx-auto max-w-2xl px-4 pt-8 pb-10 lg:max-w-6xl" {
                 (encabezado("Estudiantes", "Gestión de alumnos por grado"))
                 div class="items-start lg:grid lg:grid-cols-12 lg:gap-10" {
                     aside class="mb-10 lg:sticky lg:top-24 lg:col-span-5" {

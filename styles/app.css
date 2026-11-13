@@ -11,8 +11,28 @@
 @source "../src";
 @source "../public/js/app.js";
 
+/* Inter, self-hosted like the Go app. Only the Latin subsets are needed. */
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(/public/fonts/inter-latin-ext.woff2) format("woff2");
+  unicode-range: U+100-2BA, U+2BD-2C5, U+2C7-2CC, U+2CE-2D7, U+2DD-2FF, U+304, U+308, U+329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(/public/fonts/inter-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+131, U+152-153, U+2BB-2BC, U+2C6, U+2DA, U+2DC, U+304, U+308, U+329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 /* iOS-inspired palette taken from the original Go design. */
 @theme {
+  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
   --color-ios-bg: #f2f2f7;
   --color-ios-blue: #007aff;
   --color-ios-blue-dark: #0062cc;
@@ -26,6 +46,11 @@
 @layer base {
   * {
     -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    font-optical-sizing: auto;
+    scroll-behavior: smooth;
   }
 
   input:focus,
@@ -104,7 +129,7 @@
 
   .select-ios {
     @apply w-full cursor-pointer appearance-none rounded-2xl border border-gray-300 bg-white bg-no-repeat px-4 py-3 pr-10 text-[17px] font-medium text-gray-900 transition-all focus:border-ios-blue focus:ring-2 focus:ring-blue-100;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%23666' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
     background-position: right 0.75rem center;
     background-size: 1.25em 1.25em;
   }

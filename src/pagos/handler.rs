@@ -242,11 +242,12 @@ fn vista_gestion(semana: &Semana, grado: Option<i64>, token: &str, flash: Option
             }
             main class="mx-auto max-w-2xl px-4 pt-6 pb-20 lg:max-w-6xl lg:pt-10" {
                 header class="mb-8 lg:mb-12" {
-                    h1 class="text-[28px] leading-tight font-bold tracking-tight text-gray-900 sm:text-[34px]" { (nombre) }
-                    div class="mt-1 flex flex-wrap items-center gap-2" {
-                        a href=(navegar(-7)) class="rounded-lg p-1 text-gray-400 hover:bg-white hover:text-ios-blue" title="Semana anterior" { (icono(Icono::ChevronIzquierda, "h-5 w-5")) }
-                        p class="text-[17px] font-medium text-ios-gray" { (fechas::etiqueta_semana(semana.lunes)) }
-                        a href=(navegar(7)) class="rounded-lg p-1 text-gray-400 hover:bg-white hover:text-ios-blue" title="Semana siguiente" { (icono(Icono::ChevronDerecha, "h-5 w-5")) }
+                    h1 class="text-[34px] leading-tight font-bold tracking-tight text-gray-900" { (nombre) }
+                    p class="mt-1 text-[17px] font-medium text-ios-gray" { (fechas::etiqueta_semana(semana.lunes)) }
+                    // Desktop-only extras; mobile keeps the original Go layout.
+                    div class="mt-2 hidden items-center gap-3 lg:flex" {
+                        a href=(navegar(-7)) class="inline-flex items-center text-[15px] font-semibold text-ios-blue" { (icono(Icono::ChevronIzquierda, "h-4 w-4")) "Semana anterior" }
+                        a href=(navegar(7)) class="inline-flex items-center text-[15px] font-semibold text-ios-blue" { "Semana siguiente" (icono(Icono::ChevronDerecha, "h-4 w-4")) }
                         a href=(url_comprobante(id, semana.lunes, grado.unwrap_or(0))) class="ml-auto inline-flex items-center gap-1 text-[15px] font-semibold text-ios-blue" {
                             (icono(Icono::Recibo, "h-5 w-5")) "Comprobante"
                         }
@@ -277,7 +278,7 @@ fn vista_gestion(semana: &Semana, grado: Option<i64>, token: &str, flash: Option
                                 }
                             }
                         }
-                        div class="mt-6 space-y-2 rounded-3xl border border-gray-200 bg-white p-5 text-[15px]" {
+                        div class="mt-6 hidden space-y-2 rounded-3xl border border-gray-200 bg-white p-5 text-[15px] lg:block" {
                             div class="flex justify-between" { span class="text-gray-500" { "Consumo de la semana" } span class="font-semibold tabular-nums" { (soles(semana.subtotal())) } }
                             div class="flex justify-between" { span class="text-gray-500" { "Deuda anterior" } span class="font-semibold tabular-nums" { (soles(semana.deuda_anterior)) } }
                             div class="flex justify-between" { span class="text-gray-500" { "Pagos de la semana" } span class="font-semibold tabular-nums" { "- " (soles(pagado)) } }

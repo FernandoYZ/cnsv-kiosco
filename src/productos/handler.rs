@@ -13,8 +13,7 @@ use crate::{
     state::AppState,
     templates::{
         components::{
-            Icono, bottom_nav, encabezado, estado_vacio, icono, ios_nav, mensaje_flash, monto,
-            soles,
+            Icono, encabezado, estado_vacio, icono, ios_nav, mensaje_flash, monto, soles,
         },
         layout,
     },
@@ -113,7 +112,7 @@ fn fila(p: &Producto) -> Markup {
                 }
             }
             div class="flex shrink-0 items-center gap-1" {
-                a href=(format!("/productos?editar={}#p{}", p.id, p.id)) class="btn-text text-ios-blue hover:bg-blue-50" { "Editar" }
+                a href=(format!("/productos?editar={}#p{}", p.id, p.id)) data-replace class="btn-text text-ios-blue hover:bg-blue-50" { "Editar" }
                 form method="post" action=(format!("/productos/{}/estado", p.id))
                     data-confirm=[p.esta_activo.then(|| format!("¿Deshabilitar {}?", p.nombre))] {
                     input type="hidden" name="activo" value=(if p.esta_activo { "0" } else { "1" });
@@ -147,7 +146,7 @@ fn fila_edicion(p: &Producto) -> Markup {
                 p class="text-[13px] text-ios-gray" { "Cambiar el precio no altera las ventas ya registradas." }
                 div class="flex gap-3" {
                     button type="submit" class="flex-1 rounded-xl bg-ios-blue py-3 font-bold text-white shadow-sm transition-all active:scale-[0.98]" { "Guardar Cambios" }
-                    a href="/productos" class="rounded-xl border border-gray-200 bg-white px-6 py-3 font-semibold text-gray-600 transition-all active:scale-[0.98]" { "Cancelar" }
+                    a href="/productos" data-replace class="rounded-xl border border-gray-200 bg-white px-6 py-3 font-semibold text-gray-600 transition-all active:scale-[0.98]" { "Cancelar" }
                 }
             }
         }
@@ -160,9 +159,8 @@ fn vista(productos: &[Producto], editar: Option<i64>, flash: Option<&str>) -> Ma
         "Productos",
         flash,
         html! {
-            (bottom_nav())
             (ios_nav(("/", "Atrás"), "Configuración de Productos", html! {}))
-            main class="mx-auto max-w-2xl px-4 pt-6 pb-32 sm:pb-10 lg:max-w-6xl" {
+            main class="mx-auto max-w-2xl px-4 pt-6 pb-10 lg:max-w-6xl" {
                 (encabezado("Productos", "Catálogo general del kiosco"))
                 div class="lg:grid lg:grid-cols-12 lg:items-start lg:gap-10" {
                     aside class="mb-10 lg:sticky lg:top-24 lg:col-span-5 lg:mb-0" {
@@ -204,6 +202,9 @@ fn vista(productos: &[Producto], editar: Option<i64>, flash: Option<&str>) -> Ma
                                     }
                                 }
                             }
+                        }
+                        div class="mt-8 px-4 lg:hidden" {
+                            a href="/" class="block w-full rounded-2xl bg-gray-900 py-4 text-center font-bold text-white transition-all active:scale-[0.98]" { "Volver al Sistema" }
                         }
                     }
                 }

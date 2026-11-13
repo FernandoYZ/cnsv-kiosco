@@ -8,8 +8,17 @@ pub fn page(title: &str, flash: Option<&str>, content: Markup) -> Markup {
             head {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover";
-                meta name="theme-color" content="#007aff";
+                // Installable as a home-screen app (standalone, no browser bar), as the Go app.
+                meta name="theme-color" content="#4f46e5";
+                meta name="mobile-web-app-capable" content="yes";
+                meta name="apple-mobile-web-app-capable" content="yes";
+                meta name="apple-mobile-web-app-status-bar-style" content="default";
+                meta name="apple-mobile-web-app-title" content="Kiosco";
                 title { (title) " · Kiosco del Valle" }
+                link rel="icon" href="/public/images/favicon.webp" type="image/webp";
+                link rel="apple-touch-icon" href="/public/images/favicon.webp";
+                link rel="manifest" href="/public/manifest.json";
+                link rel="preload" href="/public/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin;
                 link rel="stylesheet" href="/public/css/app.css";
                 script src="/public/js/app.js" defer {}
             }

@@ -180,7 +180,7 @@ fn vista(
         flash,
         html! {
             (bottom_nav())
-            main class="mx-auto max-w-full p-4 pt-0 pb-32 sm:p-6 sm:pt-0" {
+            main class="mx-auto min-h-screen max-w-full bg-gray-50 p-4 pt-0 pb-32 sm:p-6 sm:pt-0" {
                 (cabecera(lunes, id_grado))
 
                 div class="sticky top-0 z-20 mb-4 rounded-xl border border-gray-200 bg-white" {

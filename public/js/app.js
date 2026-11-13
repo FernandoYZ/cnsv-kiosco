@@ -3,11 +3,27 @@
 (function () {
   'use strict';
 
-  // Toast: fade out and drop `?ok=` so a reload does not show it again.
+  const TOAST_KEY = 'kiosco:toast';
+
+  function showToast(text) {
+    const el = document.createElement('div');
+    el.setAttribute('role', 'status');
+    el.className = 'fixed top-6 left-1/2 z-[100] -translate-x-1/2 rounded-2xl bg-gray-900 px-5 py-3 text-[15px] font-semibold text-white shadow-xl transition-opacity duration-300';
+    el.textContent = text;
+    document.body.appendChild(el);
+    fadeOut(el);
+  }
+
+  function fadeOut(el) {
+    setTimeout(() => { el.style.opacity = '0'; }, 1800);
+    setTimeout(() => el.remove(), 2200);
+  }
+
+  // Toast rendered by the server (`?ok=`): fade out and drop the parameter so a
+  // reload does not show it again.
   const toast = document.querySelector('[data-toast]');
   if (toast) {
-    setTimeout(() => { toast.style.opacity = '0'; }, 1800);
-    setTimeout(() => toast.remove(), 2200);
+    fadeOut(toast);
     const url = new URL(location.href);
     if (url.searchParams.has('ok')) {
       url.searchParams.delete('ok');
@@ -15,31 +31,88 @@
     }
   }
 
+  // Toast carried over after going back in history (see form submission below).
+  try {
+    const pending = sessionStorage.getItem(TOAST_KEY);
+    if (pending) {
+      sessionStorage.removeItem(TOAST_KEY);
+      showToast(pending);
+    }
+  } catch (_) { /* storage unavailable */ }
+
   // Some browsers (Safari) restore pages from the back-forward cache even with
   // `Cache-Control: no-store`; reload so data is never stale after going back.
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) location.reload();
   });
 
-  // <form data-confirm="..."> asks before submitting; every POST form disables
-  // its buttons once sent so a double tap cannot submit twice.
-  document.addEventListener('submit', (event) => {
+  // Links with data-replace swap the current history entry (e.g. "Editar"),
+  // so going back does not step through every intermediate state.
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('a[data-replace]');
+    if (!link || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    event.preventDefault();
+    location.replace(link.href);
+  });
+
+  // POST forms: confirm if asked, block double submits and keep the history
+  // like a native app. The server answers with a redirect (PRG); instead of
+  // pushing a new entry we either replace the current one (same screen) or go
+  // back when the destination is the screen we came from.
+  const withoutOk = (url) => {
+    const copy = new URL(url, location.href);
+    copy.searchParams.delete('ok');
+    return copy;
+  };
+
+  document.addEventListener('submit', async (event) => {
     const form = event.target;
     const message = form.dataset.confirm;
     if (message && !confirm(message)) {
       event.preventDefault();
       return;
     }
-    if (form.method.toLowerCase() === 'post') {
-      if (form.dataset.sent) {
-        event.preventDefault();
-        return;
-      }
-      form.dataset.sent = '1';
-      form.querySelectorAll('button[type="submit"]').forEach((button) => {
-        button.disabled = true;
-        button.classList.add('opacity-60');
-      });
+    if (form.method.toLowerCase() !== 'post') return;
+
+    event.preventDefault();
+    if (form.dataset.sent) return;
+    form.dataset.sent = '1';
+    const body = new URLSearchParams(new FormData(form));
+    form.querySelectorAll('button[type="submit"]').forEach((button) => {
+      button.disabled = true;
+      button.classList.add('opacity-60');
+    });
+
+    let response;
+    try {
+      response = await fetch(form.action, { method: 'POST', body, credentials: 'same-origin' });
+    } catch (_) {
+      // Network failure: fall back to a regular submission.
+      delete form.dataset.sent;
+      form.submit();
+      return;
+    }
+
+    const html = await response.text();
+    if (!response.ok || !response.redirected) {
+      // Error page (or unexpected answer): show it in place.
+      document.open();
+      document.write(html);
+      document.close();
+      return;
+    }
+
+    const target = new URL(response.url);
+    const here = withoutOk(location.href);
+    const referrer = document.referrer ? withoutOk(document.referrer) : null;
+
+    if (target.pathname !== here.pathname && referrer && referrer.origin === here.origin
+        && referrer.pathname === target.pathname) {
+      const text = new DOMParser().parseFromString(html, 'text/html').querySelector('[data-toast]');
+      try { if (text) sessionStorage.setItem(TOAST_KEY, text.textContent.trim()); } catch (_) { /* ignore */ }
+      history.back();
+    } else {
+      location.replace(target.href);
     }
   });
 
