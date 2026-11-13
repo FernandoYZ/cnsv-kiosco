@@ -1,5 +1,7 @@
 mod app;
 mod assets;
+mod cierre;
+mod cobranza;
 mod config;
 mod consumos;
 mod dashboard;

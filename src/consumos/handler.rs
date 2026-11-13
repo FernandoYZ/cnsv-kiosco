@@ -18,7 +18,9 @@ use crate::{
     productos::{self, Producto},
     state::AppState,
     templates::{
-        components::{Icono, avatar, estado_vacio, icono, ios_nav, mensaje_flash, monto},
+        components::{
+            Icono, avatar, estado_vacio, icono, ios_nav, mensaje_flash, monto, selector_dia,
+        },
         layout,
     },
 };
@@ -50,32 +52,6 @@ fn url_volver(sector: Option<Sector>, grado: Option<i64>, fecha: NaiveDate) -> S
         (Some(sector), _) => url_sector(sector, fecha),
         (None, Some(grado)) => format!("/?fecha={}&grado={grado}", fechas::iso(fecha)),
         (None, None) => format!("/?fecha={}", fechas::iso(fecha)),
-    }
-}
-
-/// Day `<select>` for the week of `fecha` (Monday–Saturday) that navigates on change.
-fn selector_dia(fecha: NaiveDate, url: impl Fn(NaiveDate) -> String) -> Markup {
-    let lunes = fechas::lunes_de(fecha);
-    let mut dias: Vec<NaiveDate> = (0..6).map(|d| fechas::sumar_dias(lunes, d)).collect();
-    if !dias.contains(&fecha) {
-        dias.push(fecha);
-    }
-    html! {
-        div class="px-3 py-3 sm:px-4 sm:py-4 print:hidden" {
-            div class="mx-auto flex max-w-2xl items-center gap-2 lg:max-w-6xl" {
-                a href=(url(fechas::sumar_dias(lunes, -7))) class="rounded-xl p-2.5 text-gray-500 hover:bg-white hover:text-ios-blue" title="Semana anterior" {
-                    (icono(Icono::ChevronIzquierda, "h-5 w-5"))
-                }
-                select data-navigate aria-label="Día" class="select-ios" {
-                    @for dia in &dias {
-                        option value=(url(*dia)) selected[*dia == fecha] { (fechas::opcion_dia(*dia)) }
-                    }
-                }
-                a href=(url(fechas::sumar_dias(lunes, 7))) class="rounded-xl p-2.5 text-gray-500 hover:bg-white hover:text-ios-blue" title="Semana siguiente" {
-                    (icono(Icono::ChevronDerecha, "h-5 w-5"))
-                }
-            }
-        }
     }
 }
 

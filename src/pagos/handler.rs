@@ -24,6 +24,8 @@ use crate::{
 
 #[derive(Deserialize)]
 pub struct SemanaQuery {
+    /// `cobranza` when the receipt was opened from the collections list.
+    desde: Option<String>,
     fecha: Option<String>,
     grado: Option<String>,
     ok: Option<String>,
@@ -340,10 +342,14 @@ pub async fn comprobante(
 ) -> Result<Markup, AppError> {
     let semana = semana(&state, id_estudiante, q.fecha.as_deref()).await?;
     let grado = grado_desde(q.grado.as_deref()).or(semana.estudiante.id_grado);
-    Ok(vista_comprobante(&semana, grado))
+    let volver = match q.desde.as_deref() {
+        Some("cobranza") => "/cobranza".to_owned(),
+        _ => url_semana(semana.lunes, grado),
+    };
+    Ok(vista_comprobante(&semana, &volver))
 }
 
-fn vista_comprobante(semana: &Semana, grado: Option<i64>) -> Markup {
+fn vista_comprobante(semana: &Semana, volver: &str) -> Markup {
     // Consumption arrives ordered by date: group consecutive lines per day.
     let mut por_dia: Vec<Vec<&ConsumoDetalle>> = Vec::new();
     for consumo in &semana.consumos {
@@ -361,10 +367,19 @@ fn vista_comprobante(semana: &Semana, grado: Option<i64>) -> Markup {
             script src=(assets::url("js/vendor/html2canvas.min.js")) defer {}
             main class="mx-auto max-w-2xl p-2 sm:p-4" {
                 div class="mb-4 flex items-center justify-between gap-3" {
-                    a href=(url_semana(semana.lunes, grado)) class="rounded-lg border border-gray-200/50 bg-white/70 px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm backdrop-blur-md transition-all duration-150 hover:bg-white/90 active:scale-95" { "← Volver" }
-                    button type="button" data-copy-receipt data-file-name=(format!("nota-venta-{nombre}.png"))
-                        class="flex items-center gap-2 rounded-lg border border-blue-700/20 bg-gradient-to-b from-blue-500 to-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-all duration-150 hover:from-blue-600 hover:to-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60" {
-                        span { "📋 Copiar" }
+                    a href=(volver) class="rounded-lg border border-gray-200/50 bg-white/70 px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm backdrop-blur-md transition-all duration-150 hover:bg-white/90 active:scale-95" { "← Volver" }
+                    div class="flex gap-2" {
+                        // Shares the receipt image (WhatsApp, etc.) where the browser supports it.
+                        button type="button" data-share-receipt hidden
+                            data-file-name=(format!("nota-venta-{nombre}.png"))
+                            data-caption=(format!("Nota de venta semanal de {} – Kiosco del Valle. Total a pagar: {}", semana.estudiante.nombres, soles(semana.total())))
+                            class="flex items-center gap-2 rounded-lg border border-green-700/20 bg-gradient-to-b from-green-500 to-green-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-all duration-150 active:scale-95 disabled:opacity-60" {
+                            span { "📤 Compartir" }
+                        }
+                        button type="button" data-copy-receipt data-file-name=(format!("nota-venta-{nombre}.png"))
+                            class="flex items-center gap-2 rounded-lg border border-blue-700/20 bg-gradient-to-b from-blue-500 to-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-all duration-150 hover:from-blue-600 hover:to-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60" {
+                            span { "📋 Copiar" }
+                        }
                     }
                 }
                 div id="comprobante" class="overflow-hidden rounded-lg border-2 border-gray-800 bg-white shadow-lg" {

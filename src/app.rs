@@ -14,8 +14,8 @@ use tower_http::{
 };
 
 use crate::{
-    assets, consumos, dashboard, db, error::AppError, estudiantes, pagos, productos,
-    state::AppState,
+    assets, cierre, cobranza, consumos, dashboard, db, error::AppError, estudiantes, pagos,
+    productos, state::AppState,
 };
 
 pub fn router(state: AppState) -> Router {
@@ -42,6 +42,9 @@ pub fn router(state: AppState) -> Router {
             "/comprobante/{id_estudiante}",
             get(pagos::handler::comprobante),
         )
+        // Collections and day close
+        .route("/cobranza", get(cobranza::handler::index))
+        .route("/cierre", get(cierre::handler::index))
         // Configuration
         .route(
             "/estudiantes",
@@ -217,6 +220,50 @@ mod tests {
         )
         .await;
         assert_eq!(revalidado.status(), StatusCode::NOT_MODIFIED);
+    }
+
+    #[tokio::test]
+    async fn cobranza_y_cierre_muestran_saldos_y_ventas() {
+        let estado = estado().await;
+        estado
+            .db
+            .call(|c| {
+                c.execute_batch(
+                    "INSERT INTO consumos (id_estudiante, id_producto, cantidad, precio_unitario_venta, fecha_consumo)
+                       VALUES (1, 2, 2, 5.0, '2026-10-27');
+                     INSERT INTO pagos (id_estudiante, monto, fecha_pago) VALUES (1, 4.0, '2026-10-27');",
+                )
+            })
+            .await
+            .unwrap();
+        let app = router(estado);
+
+        let cobranza = texto(enviar(&app, get("/cobranza")).await).await;
+        assert!(cobranza.contains("Alva, Ana"));
+        assert!(cobranza.contains("S/ 6.00"), "10.00 consumed - 4.00 paid");
+        assert!(cobranza.contains("tiene un saldo pendiente de S/ 6.00"));
+        assert!(
+            !cobranza.contains("Bravo, Luis"),
+            "students without debt are not listed"
+        );
+
+        let cierre = texto(enviar(&app, get("/cierre?fecha=2026-10-27")).await).await;
+        assert!(cierre.contains("S/ 10.00"), "sold");
+        assert!(cierre.contains("S/ 4.00"), "collected");
+    }
+
+    #[tokio::test]
+    async fn el_comprobante_abierto_desde_cobranza_vuelve_a_cobranza() {
+        let app = router(estado().await);
+        let html = texto(
+            enviar(
+                &app,
+                get("/comprobante/1?fecha=2026-10-26&grado=3&desde=cobranza"),
+            )
+            .await,
+        )
+        .await;
+        assert!(html.contains(r#"href="/cobranza""#));
     }
 
     #[tokio::test]

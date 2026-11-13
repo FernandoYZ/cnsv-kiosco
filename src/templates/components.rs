@@ -1,6 +1,9 @@
 //! Reusable HTML pieces of the iOS-inspired design.
 
+use chrono::NaiveDate;
 use maud::{Markup, PreEscaped, html};
+
+use crate::fechas;
 
 #[derive(Clone, Copy)]
 pub enum Icono {
@@ -149,10 +152,38 @@ pub fn bottom_nav() -> Markup {
         nav id="bottom-nav" class="fixed right-6 bottom-6 left-6 z-50 rounded-[28px] border border-white/20 bg-white/80 shadow-[0_20px_50px_rgba(0,0,0,0.15)] backdrop-blur-2xl transition-transform duration-300 sm:hidden print:hidden"
             style="padding-bottom: env(safe-area-inset-bottom)" {
             div class="flex h-20 items-center justify-around px-2" {
-                (item("/", Icono::Inicio, "Inicio"))
-                (item("/registro", Icono::Registro, "Registro"))
+                // Shown only on the weekly view, so "Inicio" would point to itself.
                 (item("/estudiantes", Icono::Estudiantes, "Alumnos"))
                 (item("/productos", Icono::Productos, "Productos"))
+                (item("/registro", Icono::Registro, "Registro"))
+                (item("/cobranza", Icono::Dinero, "Cobranza"))
+                (item("/cierre", Icono::Portapapeles, "Cierre"))
+            }
+        }
+    }
+}
+
+/// Day `<select>` for the week of `fecha` (Monday–Saturday) that navigates on change.
+pub fn selector_dia(fecha: NaiveDate, url: impl Fn(NaiveDate) -> String) -> Markup {
+    let lunes = fechas::lunes_de(fecha);
+    let mut dias: Vec<NaiveDate> = (0..6).map(|d| fechas::sumar_dias(lunes, d)).collect();
+    if !dias.contains(&fecha) {
+        dias.push(fecha);
+    }
+    html! {
+        div class="px-3 py-3 sm:px-4 sm:py-4 print:hidden" {
+            div class="mx-auto flex max-w-2xl items-center gap-2 lg:max-w-6xl" {
+                a href=(url(fechas::sumar_dias(lunes, -7))) class="rounded-xl p-2.5 text-gray-500 hover:bg-white hover:text-ios-blue" title="Semana anterior" {
+                    (icono(Icono::ChevronIzquierda, "h-5 w-5"))
+                }
+                select data-navigate aria-label="Día" class="select-ios" {
+                    @for dia in &dias {
+                        option value=(url(*dia)) selected[*dia == fecha] { (fechas::opcion_dia(*dia)) }
+                    }
+                }
+                a href=(url(fechas::sumar_dias(lunes, 7))) class="rounded-xl p-2.5 text-gray-500 hover:bg-white hover:text-ios-blue" title="Semana siguiente" {
+                    (icono(Icono::ChevronDerecha, "h-5 w-5"))
+                }
             }
         }
     }

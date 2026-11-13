@@ -157,6 +157,8 @@ fn cabecera(lunes: NaiveDate, id_grado: i64) -> Markup {
                 nav class="flex items-center gap-1 rounded-[1.25rem] border border-gray-200/40 bg-white p-1" {
                     (herramienta("/estudiantes", Icono::Estudiantes, "ALUMNOS"))
                     (herramienta("/productos", Icono::Productos, "PRODUCTOS"))
+                    (herramienta("/cobranza", Icono::Dinero, "COBRANZA"))
+                    (herramienta("/cierre", Icono::Portapapeles, "CIERRE"))
                     a href="/registro" class="flex items-center gap-2 rounded-[0.9rem] bg-blue-600 px-5 py-2.5 text-[11px] font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700 active:scale-95" {
                         (icono(Icono::Registro, "h-4 w-4")) span { "REGISTRO" }
                     }

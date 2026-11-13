@@ -206,19 +206,58 @@
     render();
   }
 
+  // <button data-share-text="...">: share a text message (WhatsApp, SMS…).
+  // Falls back to WhatsApp Web where the Web Share API is not available.
+  document.addEventListener('click', async (event) => {
+    const button = event.target.closest('button[data-share-text]');
+    if (!button) return;
+    const text = button.dataset.shareText;
+    if (navigator.share) {
+      try { await navigator.share({ text }); } catch (_) { /* cancelled */ }
+    } else {
+      window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
+    }
+  });
+
+  // Weekly receipt rendered as a PNG image.
+  const receipt = document.getElementById('comprobante');
+  const receiptBlob = async () => {
+    const canvas = await html2canvas(receipt, { scale: 2, backgroundColor: '#ffffff' });
+    return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  };
+
+  // Share the receipt image directly (mobile share sheet → WhatsApp, etc.).
+  const shareButton = document.querySelector('[data-share-receipt]');
+  if (shareButton && receipt) {
+    const probe = new File([''], 'probe.png', { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [probe] })) {
+      shareButton.hidden = false;
+      const label = shareButton.querySelector('span');
+      shareButton.addEventListener('click', async () => {
+        if (typeof html2canvas !== 'function') return;
+        label.textContent = 'Generando…';
+        shareButton.disabled = true;
+        try {
+          const file = new File([await receiptBlob()], shareButton.dataset.fileName, { type: 'image/png' });
+          await navigator.share({ files: [file], text: shareButton.dataset.caption });
+        } catch (_) { /* cancelled */ }
+        label.textContent = '📤 Compartir';
+        shareButton.disabled = false;
+      });
+    }
+  }
+
   // Weekly receipt: copy as PNG (download when clipboard images are unsupported).
   const copyButton = document.querySelector('[data-copy-receipt]');
-  if (copyButton) {
+  if (copyButton && receipt) {
     const label = copyButton.querySelector('span');
-    const receipt = document.getElementById('comprobante');
     const setState = (text, busy) => { label.textContent = text; copyButton.disabled = busy; };
 
     copyButton.addEventListener('click', async () => {
       if (typeof html2canvas !== 'function') { setState('✗ Error', false); return; }
       setState('Generando…', true);
       try {
-        const canvas = await html2canvas(receipt, { scale: 2, backgroundColor: '#ffffff' });
-        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+        const blob = await receiptBlob();
         if (navigator.clipboard && window.ClipboardItem) {
           await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
           setState('✓ Copiado', true);
