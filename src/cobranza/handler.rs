@@ -6,8 +6,7 @@ use super::repository::{self, Saldo};
 use crate::{
     error::AppError,
     estudiantes::{GRADOS, grado_desde},
-    fechas,
-    pagos::handler::url_comprobante,
+    fechas, rutas,
     state::AppState,
     templates::{
         components::{Icono, avatar, estado_vacio, icono, ios_nav, monto, soles},
@@ -24,9 +23,9 @@ pub struct Filtro {
 fn mensaje(s: &Saldo) -> String {
     format!(
         "Hola, le saludamos del Kiosco del Valle. {} {} ({}) tiene un saldo pendiente de S/ {}. ¡Gracias por su preferencia!",
-        s.nombres,
-        s.apellidos,
-        s.grado(),
+        s.estudiante.nombres,
+        s.estudiante.apellidos,
+        s.estudiante.grado(),
         monto(s.saldo)
     )
 }
@@ -58,18 +57,19 @@ fn vista(deudores: &[&Saldo], al_dia: usize, id_grado: Option<i64>) -> Markup {
         None,
         html! {
             (ios_nav(("/", "Atrás"), "Cobranza", html! {}))
-            main class="mx-auto max-w-2xl px-4 pt-6 pb-10 lg:max-w-4xl" {
-                header class="mb-6" {
-                    h1 class="text-[34px] leading-tight font-bold tracking-tight text-gray-900" { "Cobranza" }
-                    p class="mt-1 text-[17px] font-medium text-ios-gray" {
-                        (deudores.len()) " con deuda · " (al_dia) " al día"
+            main class="mx-auto max-w-2xl px-4 pt-4 pb-10 sm:pt-6 lg:max-w-4xl" {
+                header class="mb-4 sm:mb-6" {
+                    h1 class="text-[28px] leading-tight font-bold tracking-tight text-gray-900 sm:text-[34px]" { "Cobranza" }
+                }
+                div class="ios-card mb-4 p-4 sm:mb-6 sm:p-5" {
+                    p class="text-[13px] font-semibold tracking-wide text-ios-gray uppercase" { "Total por cobrar" }
+                    p class="mt-1 text-[32px] leading-none font-black text-ios-red tabular-nums sm:text-[36px]" { (soles(total)) }
+                    div class="mt-3 flex flex-wrap gap-2" {
+                        span class="badge inline-flex items-center gap-1.5 bg-gray-100 text-gray-700" { span class="h-1.5 w-1.5 rounded-full bg-ios-red" {} (deudores.len()) " con deuda" }
+                        span class="badge inline-flex items-center gap-1.5 bg-gray-100 text-gray-700" { span class="h-1.5 w-1.5 rounded-full bg-ios-green" {} (al_dia) " al día" }
                     }
                 }
-                div class="ios-card mb-6 flex items-center justify-between p-5" {
-                    span class="text-[15px] font-medium text-gray-500" { "Total por cobrar" }
-                    span class="text-[28px] font-black text-ios-red tabular-nums" { (soles(total)) }
-                }
-                nav class="no-scrollbar mb-6 flex gap-2 overflow-x-auto px-1 pb-1" aria-label="Filtrar por grado" {
+                nav class="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:mb-6 sm:px-1" aria-label="Filtrar por grado" {
                     (pill("/cobranza".to_owned(), "Todos", id_grado.is_none()))
                     @for g in &GRADOS {
                         (pill(format!("/cobranza?grado={}", g.id), g.nombre, id_grado == Some(g.id)))
@@ -81,31 +81,32 @@ fn vista(deudores: &[&Saldo], al_dia: usize, id_grado: Option<i64>) -> Markup {
                     } @else {
                         div class="divide-y divide-gray-100" {
                             @for s in deudores {
-                                div class="flex items-center justify-between gap-3 p-4" {
-                                    div class="flex min-w-0 items-center gap-3" {
-                                        (avatar(&s.apellidos, true))
-                                        div class="min-w-0" {
-                                            p class="truncate text-[16px] leading-tight font-semibold text-gray-900" { (s.nombre_completo()) }
-                                            p class="text-[13px] font-medium text-ios-gray" {
-                                                (s.grado()) " · "
+                                // Narrow screens: info on top, full-width actions below. `lg`+: one row.
+                                article class="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:gap-4" {
+                                    div class="flex min-w-0 flex-1 items-center gap-3" {
+                                        (avatar(&s.estudiante.apellidos, true))
+                                        div class="min-w-0 flex-1" {
+                                            p class="line-clamp-2 text-[16px] leading-tight font-semibold text-gray-900 lg:truncate" { (s.estudiante.nombre_completo()) }
+                                            p class="mt-0.5 truncate text-[13px] text-ios-gray" { (s.estudiante.grado()) }
+                                            p class="truncate text-[12px] text-gray-400" {
                                                 @match s.ultimo_pago {
-                                                    Some(fecha) => { "último pago " (fechas::corta(fecha)) }
-                                                    None => { "sin pagos" }
+                                                    Some(fecha) => { "Último pago " (fechas::corta(fecha)) }
+                                                    None => { "Sin pagos" }
                                                 }
                                             }
                                         }
+                                        span class="shrink-0 self-start text-[17px] font-bold text-gray-900 tabular-nums lg:self-center" { (soles(s.saldo)) }
                                     }
-                                    div class="flex shrink-0 flex-col items-end gap-1" {
-                                        span class="text-[17px] font-bold text-ios-red tabular-nums" { (soles(s.saldo)) }
-                                        div class="flex items-center gap-1" {
-                                            a href=(format!("{}&desde=cobranza", url_comprobante(s.id_estudiante, fechas::lunes_de(hoy), s.id_grado.unwrap_or(0))))
-                                                class="btn-text px-2 text-[13px] text-ios-blue hover:bg-blue-50" title="Ver comprobante" {
-                                                (icono(Icono::Recibo, "inline h-4 w-4")) " Comprobante"
-                                            }
-                                            button type="button" data-share-text=(mensaje(s))
-                                                class="btn-text px-2 text-[13px] text-ios-green hover:bg-green-50" title="Compartir con la familia" {
-                                                "Compartir"
-                                            }
+                                    div class="grid grid-cols-2 gap-2 lg:flex lg:shrink-0" {
+                                        a href=(format!("{}&desde=cobranza", rutas::comprobante(s.estudiante.id, fechas::lunes_de(hoy), s.estudiante.id_grado)))
+                                            class="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-[14px] font-medium text-gray-700 transition-colors hover:bg-gray-50 active:scale-95 lg:min-h-9"
+                                            title="Ver comprobante" {
+                                            (icono(Icono::Recibo, "h-4 w-4 text-gray-400")) "Comprobante"
+                                        }
+                                        button type="button" data-share-text=(mensaje(s))
+                                            class="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-[14px] font-semibold text-ios-blue transition-colors hover:bg-blue-50 active:scale-95 lg:min-h-9"
+                                            title="Compartir con la familia" {
+                                            (icono(Icono::Compartir, "h-4 w-4")) "Compartir"
                                         }
                                     }
                                 }
