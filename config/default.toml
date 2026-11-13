@@ -6,7 +6,7 @@
 #   KIOSCO_COOKIE_SECURE   true in production (HTTPS), so cookies carry `Secure`
 
 [server]
-address = "127.0.0.1:3000"
+address = "127.0.0.1:3200"
 
 [database]
 path = "database/database.db"
