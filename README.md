@@ -48,7 +48,7 @@ La aplicación no crea usuarios: se administran directamente en la base de datos
 
 ## Configuración
 
-Los valores por defecto están en `config/default.toml`. Cada uno se puede sobrescribir con una variable de entorno:
+Todos los valores tienen un valor por defecto dentro del binario, así que para arrancar basta con el binario y `database/database.db`. Si existe, `config/default.toml` reemplaza esos valores, y las variables de entorno reemplazan a ambos. Si `KIOSCO_CONFIG` apunta a un archivo que no existe, la aplicación no arranca: se asume un error de ruta.
 
 | Variable | Por defecto | Uso |
 |----------|-------------|-----|
