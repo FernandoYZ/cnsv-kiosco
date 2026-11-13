@@ -27,7 +27,7 @@ pub async fn open(path: &Path) -> Result<Connection, StartupError> {
             "migration 001 not applied: run `sqlite3 <db> < migrations/001_consumos_unique.sql` with the app stopped"
         );
     }
-    tracing::info!(path = %path.display(), "database ready");
+    tracing::info!(path = %path.display(), "database initialized");
     Ok(conn)
 }
 

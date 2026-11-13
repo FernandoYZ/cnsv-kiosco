@@ -14,7 +14,7 @@ use crate::{
     consumos::{self, repository::ConsumoDetalle},
     error::AppError,
     estudiantes::{self, Estudiante, grado_desde},
-    fechas, forms,
+    fechas, forms, rutas,
     state::AppState,
     templates::{
         components::{Icono, estado_vacio, icono, mensaje_flash, monto, soles},
@@ -104,31 +104,6 @@ async fn semana(
         .ok_or(AppError::NotFound)
 }
 
-fn url_semana(lunes: NaiveDate, grado: Option<i64>) -> String {
-    match grado {
-        Some(g) => format!("/?fecha={}&grado={g}", fechas::iso(lunes)),
-        None => format!("/?fecha={}", fechas::iso(lunes)),
-    }
-}
-
-pub fn url_pagos(id_estudiante: i64, fecha: NaiveDate, grado: Option<i64>) -> String {
-    let base = format!(
-        "/pagos/{id_estudiante}?fecha={}",
-        fechas::iso(fechas::lunes_de(fecha))
-    );
-    match grado {
-        Some(g) => format!("{base}&grado={g}"),
-        None => base,
-    }
-}
-
-pub fn url_comprobante(id_estudiante: i64, lunes: NaiveDate, grado: i64) -> String {
-    format!(
-        "/comprobante/{id_estudiante}?fecha={}&grado={grado}",
-        fechas::iso(lunes)
-    )
-}
-
 /// `/pagos/{id}`: register and review payments of one week.
 pub async fn gestion(
     State(state): State<AppState>,
@@ -161,7 +136,7 @@ pub async fn registrar(
         tracing::warn!(id_estudiante, "duplicate payment submission ignored");
         return Ok(Redirect::to(&format!(
             "{}&ok=pago-duplicado",
-            url_pagos(id_estudiante, fecha, grado)
+            rutas::pagos(id_estudiante, fecha, grado)
         )));
     }
 
@@ -178,7 +153,7 @@ pub async fn registrar(
     match resultado {
         Ok(true) => Ok(Redirect::to(&format!(
             "{}&ok=pago",
-            url_pagos(id_estudiante, fecha, grado)
+            rutas::pagos(id_estudiante, fecha, grado)
         ))),
         Ok(false) => {
             state.envios_pago.liberar(&token);
@@ -207,7 +182,7 @@ pub async fn eliminar(
     let grado = grado_desde(form.grado.as_deref());
     Ok(Redirect::to(&format!(
         "{}&ok=pago-eliminado",
-        url_pagos(id_estudiante, semana, grado)
+        rutas::pagos(id_estudiante, semana, grado)
     )))
 }
 
@@ -224,7 +199,7 @@ fn vista_gestion(semana: &Semana, grado: Option<i64>, token: &str, flash: Option
     let total = semana.total();
     let pagado = semana.pagado();
     let nombre = semana.estudiante.nombre_completo();
-    let navegar = |dias: i64| url_pagos(id, fechas::sumar_dias(semana.lunes, dias), grado);
+    let navegar = |dias: i64| rutas::pagos(id, fechas::sumar_dias(semana.lunes, dias), grado);
 
     layout::page(
         &format!("Pagos - {nombre}"),
@@ -232,7 +207,7 @@ fn vista_gestion(semana: &Semana, grado: Option<i64>, token: &str, flash: Option
         html! {
             nav class="ios-nav" {
                 div class="mx-auto flex max-w-2xl items-center justify-between lg:max-w-6xl" {
-                    a href=(url_semana(semana.lunes, grado)) class="ios-link" {
+                    a href=(rutas::semana(semana.lunes, grado)) class="ios-link" {
                         (icono(Icono::ChevronIzquierda, "-ml-2 h-6 w-6"))
                         span class="text-[17px] font-medium" { "Atrás" }
                     }
@@ -251,7 +226,7 @@ fn vista_gestion(semana: &Semana, grado: Option<i64>, token: &str, flash: Option
                     div class="mt-2 hidden items-center gap-3 lg:flex" {
                         a href=(navegar(-7)) class="inline-flex items-center text-[15px] font-semibold text-ios-blue" { (icono(Icono::ChevronIzquierda, "h-4 w-4")) "Semana anterior" }
                         a href=(navegar(7)) class="inline-flex items-center text-[15px] font-semibold text-ios-blue" { "Semana siguiente" (icono(Icono::ChevronDerecha, "h-4 w-4")) }
-                        a href=(url_comprobante(id, semana.lunes, grado.unwrap_or(0))) class="ml-auto inline-flex items-center gap-1 text-[15px] font-semibold text-ios-blue" {
+                        a href=(rutas::comprobante(id, semana.lunes, grado)) class="ml-auto inline-flex items-center gap-1 text-[15px] font-semibold text-ios-blue" {
                             (icono(Icono::Recibo, "h-5 w-5")) "Comprobante"
                         }
                     }
@@ -273,7 +248,7 @@ fn vista_gestion(semana: &Semana, grado: Option<i64>, token: &str, flash: Option
                                 }
                                 div class="ios-row" {
                                     label for="fecha_pago" class="ios-label text-gray-600" { "Fecha" }
-                                    input type="date" name="fecha_pago" id="fecha_pago" required value=(fechas::iso(semana.lunes))
+                                    input type="date" name="fecha_pago" id="fecha_pago" required value=(semana.lunes)
                                         class="ios-input font-semibold text-ios-blue";
                                 }
                                 div class="bg-gray-50/50 p-4" {
@@ -318,7 +293,7 @@ fn vista_gestion(semana: &Semana, grado: Option<i64>, token: &str, flash: Option
                                                 }
                                             }
                                             form method="post" action=(format!("/pagos/{id}/{}/eliminar", pago.id)) data-confirm="¿Estás seguro de eliminar este pago?" {
-                                                input type="hidden" name="semana" value=(fechas::iso(semana.lunes));
+                                                input type="hidden" name="semana" value=(semana.lunes);
                                                 @if let Some(g) = grado { input type="hidden" name="grado" value=(g); }
                                                 button type="submit" class="-mr-2 px-3 py-2 text-[15px] font-semibold text-ios-red transition-colors hover:text-red-700" { "Eliminar" }
                                             }
@@ -344,20 +319,17 @@ pub async fn comprobante(
     let grado = grado_desde(q.grado.as_deref()).or(semana.estudiante.id_grado);
     let volver = match q.desde.as_deref() {
         Some("cobranza") => "/cobranza".to_owned(),
-        _ => url_semana(semana.lunes, grado),
+        _ => rutas::semana(semana.lunes, grado),
     };
     Ok(vista_comprobante(&semana, &volver))
 }
 
 fn vista_comprobante(semana: &Semana, volver: &str) -> Markup {
     // Consumption arrives ordered by date: group consecutive lines per day.
-    let mut por_dia: Vec<Vec<&ConsumoDetalle>> = Vec::new();
-    for consumo in &semana.consumos {
-        match por_dia.last_mut() {
-            Some(dia) if dia[0].fecha == consumo.fecha => dia.push(consumo),
-            _ => por_dia.push(vec![consumo]),
-        }
-    }
+    let por_dia: Vec<&[ConsumoDetalle]> = semana
+        .consumos
+        .chunk_by(|a, b| a.fecha == b.fecha)
+        .collect();
     let nombre = semana.estudiante.nombre_completo();
 
     layout::page(
@@ -408,7 +380,7 @@ fn vista_comprobante(semana: &Semana, volver: &str) -> Markup {
                             p class="py-4 text-center text-xs text-gray-500" { "No hay consumos en esta semana" }
                         } @else {
                             div class="grid grid-cols-2 gap-2" {
-                                @for dia in &por_dia {
+                                @for &dia in &por_dia {
                                     div class="rounded border-2 border-gray-300" {
                                         div class="flex items-center justify-between border-b-2 border-gray-300 bg-gray-100 px-2 py-1" {
                                             span class="text-xs font-bold text-gray-900 uppercase" { (fechas::corta(dia[0].fecha)) }

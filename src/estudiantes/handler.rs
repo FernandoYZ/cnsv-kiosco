@@ -6,10 +6,10 @@ use axum::{
 use maud::{Markup, html};
 use serde::Deserialize;
 
-use super::{Estudiante, GRADOS, grado_desde, grado_valido, repository};
+use super::{Estudiante, GRADOS, grado_desde, repository};
 use crate::{
     error::AppError,
-    forms,
+    forms, rutas,
     state::AppState,
     templates::{
         components::{Icono, avatar, encabezado, estado_vacio, ios_nav, mensaje_flash},
@@ -46,12 +46,7 @@ struct DatosEstudiante {
 }
 
 fn validar(form: &EstudianteForm) -> Result<DatosEstudiante, AppError> {
-    let id_grado = form
-        .id_grado
-        .trim()
-        .parse()
-        .ok()
-        .filter(|id| grado_valido(*id))
+    let id_grado = grado_desde(Some(&form.id_grado))
         .ok_or_else(|| AppError::BadRequest("Selecciona un grado válido.".to_owned()))?;
     Ok(DatosEstudiante {
         nombres: forms::texto(&form.nombres, "Nombres", 100)?,
@@ -61,10 +56,7 @@ fn validar(form: &EstudianteForm) -> Result<DatosEstudiante, AppError> {
 }
 
 fn url_lista(filtro: Option<i64>, ok: &str) -> String {
-    match filtro {
-        Some(grado) => format!("/estudiantes?grado={grado}&ok={ok}"),
-        None => format!("/estudiantes?ok={ok}"),
-    }
+    rutas::con_grado(format!("/estudiantes?ok={ok}"), filtro)
 }
 
 pub async fn listar(
@@ -155,10 +147,11 @@ fn campo_filtro(filtro: Option<i64>) -> Markup {
 }
 
 fn fila(e: &Estudiante, filtro: Option<i64>) -> Markup {
-    let editar = match filtro {
-        Some(g) => format!("/estudiantes?grado={g}&editar={}#e{}", e.id, e.id),
-        None => format!("/estudiantes?editar={}#e{}", e.id, e.id),
-    };
+    let editar = format!(
+        "{}#e{}",
+        rutas::con_grado(format!("/estudiantes?editar={}", e.id), filtro),
+        e.id
+    );
     html! {
         div class="flex items-center justify-between gap-2 p-4 transition-colors hover:bg-gray-50" {
             div class="flex min-w-0 items-center gap-4" {

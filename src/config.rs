@@ -1,4 +1,4 @@
-use std::{env, fs, net::SocketAddr, path::PathBuf};
+use std::{env, fs, net::SocketAddr, num::NonZeroUsize, path::PathBuf};
 
 use serde::Deserialize;
 
@@ -21,14 +21,14 @@ pub struct BackupConfig {
     /// Folder for `database-YYYY-MM-DD.db` copies.
     pub directorio: PathBuf,
     /// How many daily copies to keep (older ones are deleted).
-    pub conservar: usize,
+    pub conservar: NonZeroUsize,
 }
 
 impl Default for BackupConfig {
     fn default() -> Self {
         Self {
             directorio: PathBuf::from("database/backups"),
-            conservar: 30,
+            conservar: NonZeroUsize::new(30).expect("30 is non-zero"),
         }
     }
 }
@@ -70,12 +70,6 @@ impl Config {
         }
         if let Ok(value) = env::var("KIOSCO_BACKUP_DIR") {
             self.backup.directorio = PathBuf::from(value);
-        }
-        if self.backup.conservar == 0 {
-            return Err(StartupError::InvalidEnv {
-                name: "backup.conservar",
-                value: "0 (must keep at least one copy)".to_owned(),
-            });
         }
         Ok(())
     }

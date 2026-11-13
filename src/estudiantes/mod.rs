@@ -1,3 +1,5 @@
+use std::ops::RangeInclusive;
+
 pub mod handler;
 pub mod repository;
 
@@ -59,7 +61,7 @@ pub const GRADOS: [Grado; 7] = [
     },
 ];
 
-pub fn grado_valido(id: i64) -> bool {
+fn grado_valido(id: i64) -> bool {
     GRADOS.iter().any(|g| g.id == id)
 }
 
@@ -100,19 +102,21 @@ impl Sector {
         }
     }
 
+    fn ids(self) -> RangeInclusive<i64> {
+        match self {
+            Sector::Menor => 1..=4,
+            Sector::Mayor => 5..=7,
+        }
+    }
+
     pub fn grados(self) -> impl Iterator<Item = &'static Grado> {
-        let ids: &[i64] = match self {
-            Sector::Menor => &[1, 2, 3, 4],
-            Sector::Mayor => &[5, 6, 7],
-        };
+        let ids = self.ids();
         GRADOS.iter().filter(move |g| ids.contains(&g.id))
     }
 
-    /// SQL `IN` list built from constants, never from user input.
-    pub fn grados_sql(self) -> &'static str {
-        match self {
-            Sector::Menor => "1,2,3,4",
-            Sector::Mayor => "5,6,7",
-        }
+    /// SQL condition on `e.id_grado`, built from constants, never from user input.
+    pub fn condicion_sql(self) -> String {
+        let ids = self.ids();
+        format!("e.id_grado BETWEEN {} AND {}", ids.start(), ids.end())
     }
 }

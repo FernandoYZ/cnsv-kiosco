@@ -68,10 +68,6 @@ fn mes(fecha: NaiveDate) -> &'static str {
     MESES[fecha.month0() as usize]
 }
 
-pub fn iso(fecha: NaiveDate) -> String {
-    fecha.format("%Y-%m-%d").to_string()
-}
-
 /// `Lun 09/11`
 pub fn corta(fecha: NaiveDate) -> String {
     format!(

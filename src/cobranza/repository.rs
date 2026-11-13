@@ -1,53 +1,39 @@
 use chrono::NaiveDate;
 use tokio_rusqlite::rusqlite::{self, Connection};
 
+use crate::estudiantes::{
+    Estudiante,
+    repository::{COLUMNAS, DESDE, mapear},
+};
+
 pub struct Saldo {
-    pub id_estudiante: i64,
-    pub nombres: String,
-    pub apellidos: String,
-    pub id_grado: Option<i64>,
-    pub nombre_grado: Option<String>,
+    pub estudiante: Estudiante,
     /// All consumption minus all payments.
     pub saldo: f64,
     pub ultimo_pago: Option<NaiveDate>,
 }
 
-impl Saldo {
-    pub fn nombre_completo(&self) -> String {
-        format!("{}, {}", self.apellidos, self.nombres)
-    }
-
-    pub fn grado(&self) -> &str {
-        self.nombre_grado.as_deref().unwrap_or("Sin grado")
-    }
-}
-
 /// Current balance of every active student (`id_grado = 0` → all grades),
 /// highest debt first.
 pub fn saldos(c: &Connection, id_grado: i64) -> rusqlite::Result<Vec<Saldo>> {
-    let mut stmt = c.prepare_cached(
-        "SELECT e.id_estudiante, e.nombres, e.apellidos, e.id_grado,
-                g.anio_grado || ' ' || g.nivel_grado AS nombre_grado,
+    let sql = format!(
+        "SELECT {COLUMNAS},
                 COALESCE((SELECT SUM(c.total_linea) FROM consumos c
                           WHERE c.id_estudiante = e.id_estudiante), 0)
               - COALESCE((SELECT SUM(p.monto) FROM pagos p
                           WHERE p.id_estudiante = e.id_estudiante), 0) AS saldo,
                 (SELECT MAX(p.fecha_pago) FROM pagos p
                  WHERE p.id_estudiante = e.id_estudiante) AS ultimo_pago
-         FROM estudiantes e
-         LEFT JOIN grados g ON g.id_grado = e.id_grado
+         {DESDE}
          WHERE e.esta_activo = 1 AND (?1 = 0 OR e.id_grado = ?1)
-         ORDER BY saldo DESC, e.apellidos, e.nombres",
-    )?;
+         ORDER BY saldo DESC, e.apellidos, e.nombres"
+    );
+    let mut stmt = c.prepare_cached(&sql)?;
     stmt.query_map([id_grado], |r| {
         Ok(Saldo {
-            id_estudiante: r.get(0)?,
-            nombres: r.get(1)?,
-            apellidos: r.get(2)?,
-            id_grado: r.get(3)?,
-            nombre_grado: r.get(4)?,
-            saldo: r.get(5)?,
-            ultimo_pago: r.get(6)?,
+            estudiante: mapear(r)?,
+            saldo: r.get(6)?,
+            ultimo_pago: r.get(7)?,
         })
     })?
     .collect()
@@ -72,7 +58,7 @@ mod tests {
         .unwrap();
 
         let todos = saldos(&c, 0).unwrap();
-        let resumen: Vec<(i64, f64)> = todos.iter().map(|s| (s.id_estudiante, s.saldo)).collect();
+        let resumen: Vec<(i64, f64)> = todos.iter().map(|s| (s.estudiante.id, s.saldo)).collect();
         // Ana 10.00 - 5.00 = 5.00, Luis 1.50; Rosa is inactive and excluded.
         assert_eq!(resumen, vec![(1, 5.0), (2, 1.5)]);
         assert_eq!(
@@ -83,6 +69,6 @@ mod tests {
 
         let grado7 = saldos(&c, 7).unwrap();
         assert_eq!(grado7.len(), 1);
-        assert_eq!(grado7[0].id_estudiante, 2);
+        assert_eq!(grado7[0].estudiante.id, 2);
     }
 }

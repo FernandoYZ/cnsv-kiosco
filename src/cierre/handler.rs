@@ -7,8 +7,7 @@ use tokio_rusqlite::rusqlite;
 use super::repository::{self, PagoDelDia, Totales, VentaProducto};
 use crate::{
     error::AppError,
-    fechas,
-    pagos::handler::url_pagos,
+    fechas, rutas,
     state::AppState,
     templates::{
         components::{Icono, estado_vacio, ios_nav, selector_dia, soles},
@@ -63,7 +62,7 @@ fn vista(
             (ios_nav(("/", "Atrás"), "Cierre del día", html! {
                 button type="button" onclick="window.print()" class="ios-link text-[15px] font-medium" { "Imprimir" }
             }))
-            (selector_dia(fecha, |d| format!("/cierre?fecha={}", fechas::iso(d))))
+            (selector_dia(fecha, |d| format!("/cierre?fecha={}", d)))
             main class="mx-auto max-w-2xl px-4 pb-10 lg:max-w-4xl" {
                 header class="mb-6" {
                     h1 class="text-[34px] leading-tight font-bold tracking-tight text-gray-900" { "Cierre del día" }
@@ -105,7 +104,7 @@ fn vista(
                             } @else {
                                 div class="divide-y divide-gray-100" {
                                     @for p in pagos {
-                                        a href=(url_pagos(p.id_estudiante, fecha, None))
+                                        a href=(rutas::pagos(p.id_estudiante, fecha, None))
                                             class="flex items-center justify-between px-5 py-3 text-[15px] hover:bg-gray-50" {
                                             span class="truncate font-medium text-gray-900" { (p.estudiante) }
                                             span class="shrink-0 font-semibold text-ios-green tabular-nums" { (soles(p.monto)) }

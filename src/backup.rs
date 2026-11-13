@@ -33,7 +33,7 @@ pub enum BackupError {
 }
 
 fn nombre(fecha: NaiveDate) -> String {
-    format!("{PREFIJO}{}{EXTENSION}", fechas::iso(fecha))
+    format!("{PREFIJO}{}{EXTENSION}", fecha)
 }
 
 /// True only for files created by this module (`database-YYYY-MM-DD.db`).
@@ -97,7 +97,7 @@ pub fn programar(db: Connection, config: BackupConfig) {
         loop {
             intervalo.tick().await;
             let directorio = config.directorio.clone();
-            let conservar = config.conservar;
+            let conservar = config.conservar.get();
             let hoy = fechas::hoy();
             match db
                 .call(move |c| respaldar(c, &directorio, hoy, conservar))

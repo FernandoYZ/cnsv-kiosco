@@ -30,13 +30,13 @@ pub fn totales(c: &Connection, fecha: NaiveDate) -> rusqlite::Result<Totales> {
         "SELECT COALESCE(SUM(c.total_linea), 0),
                 COALESCE(SUM(c.cantidad), 0),
                 COUNT(DISTINCT c.id_estudiante),
-                COALESCE(SUM(CASE WHEN e.id_grado IN ({}) THEN c.total_linea END), 0),
-                COALESCE(SUM(CASE WHEN e.id_grado IN ({}) THEN c.total_linea END), 0)
+                COALESCE(SUM(CASE WHEN {} THEN c.total_linea END), 0),
+                COALESCE(SUM(CASE WHEN {} THEN c.total_linea END), 0)
          FROM consumos c
          LEFT JOIN estudiantes e ON e.id_estudiante = c.id_estudiante
          WHERE c.fecha_consumo = ?1",
-        Sector::Menor.grados_sql(),
-        Sector::Mayor.grados_sql()
+        Sector::Menor.condicion_sql(),
+        Sector::Mayor.condicion_sql()
     );
     c.query_row(&sql, [fecha], |r| {
         Ok(Totales {

@@ -10,8 +10,7 @@ use super::repository::{self, LineaSemana};
 use crate::{
     error::AppError,
     estudiantes::{self, Estudiante, GRADOS, grado_desde},
-    fechas,
-    pagos::handler::{url_comprobante, url_pagos},
+    fechas, rutas,
     state::AppState,
     templates::{
         components::{Icono, bottom_nav, es_cero, icono, mensaje_flash, monto, soles},
@@ -117,10 +116,6 @@ fn suma<'a>(filas: &'a [Fila<'a>], valor: impl Fn(&'a Fila<'a>) -> f64) -> f64 {
     filas.iter().map(valor).sum()
 }
 
-fn url_semana(lunes: NaiveDate, grado: i64) -> String {
-    format!("/?fecha={}&grado={grado}", fechas::iso(lunes))
-}
-
 fn cabecera(lunes: NaiveDate, id_grado: i64) -> Markup {
     let (desde, hasta) = fechas::rango_semana(lunes);
     let herramienta = |href: &str, ico: Icono, etiqueta: &str| {
@@ -142,12 +137,12 @@ fn cabecera(lunes: NaiveDate, id_grado: i64) -> Markup {
             }
             div class="order-first flex flex-col items-center justify-center lg:order-none" {
                 div class="inline-flex gap-2 rounded-2xl border border-gray-200/40 bg-gray-100/80 p-1 shadow-inner backdrop-blur-sm" {
-                    a href=(url_semana(fechas::sumar_dias(lunes, -7), id_grado)) title="Semana anterior"
+                    a href=(rutas::semana(fechas::sumar_dias(lunes, -7), Some(id_grado))) title="Semana anterior"
                         class="rounded-xl p-2.5 text-gray-500 transition-all duration-200 hover:bg-white hover:text-blue-600 active:scale-90" {
                         (icono(Icono::ChevronIzquierda, "h-5 w-5"))
                     }
                     a href=(format!("/?grado={id_grado}")) class="rounded-xl bg-blue-600 px-8 py-2.5 text-sm font-bold text-white shadow-lg transition-all duration-200 hover:bg-blue-700" { "Semana actual" }
-                    a href=(url_semana(fechas::sumar_dias(lunes, 7), id_grado)) title="Semana siguiente"
+                    a href=(rutas::semana(fechas::sumar_dias(lunes, 7), Some(id_grado))) title="Semana siguiente"
                         class="rounded-xl p-2.5 text-gray-500 transition-all duration-200 hover:bg-white hover:text-blue-600 active:scale-90" {
                         (icono(Icono::ChevronDerecha, "h-5 w-5"))
                     }
@@ -188,7 +183,7 @@ fn vista(
                 div class="sticky top-0 z-20 mb-4 rounded-xl border border-gray-200 bg-white" {
                     nav class="no-scrollbar -mb-px flex space-x-2 overflow-x-auto" aria-label="Grados" {
                         @for g in &GRADOS {
-                            a href=(url_semana(lunes, g.id))
+                            a href=(rutas::semana(lunes, Some(g.id)))
                                 aria-current=[(g.id == id_grado).then_some("page")]
                                 class=(if g.id == id_grado { "border-b-2 border-blue-500 px-4 py-3 text-sm font-medium whitespace-nowrap text-blue-600" } else { "border-b-2 border-transparent px-4 py-3 text-sm font-medium whitespace-nowrap text-gray-500 hover:border-gray-300 hover:text-gray-700" }) {
                                 (g.nombre)
@@ -222,7 +217,7 @@ fn vista(
                                         td class=(format!("nombre-estudiante w-48 px-4 py-3 text-sm font-medium text-gray-800 {fondo}")) {
                                             div class="flex items-center justify-between gap-2" {
                                                 div class="flex-1 leading-tight break-words" { (fila.estudiante.nombre_completo()) }
-                                                a href=(url_comprobante(id, lunes, id_grado)) title="Ver comprobante semanal"
+                                                a href=(rutas::comprobante(id, lunes, Some(id_grado))) title="Ver comprobante semanal"
                                                     class="shrink-0 rounded-md p-1.5 text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-800" {
                                                     (icono(Icono::Recibo, "h-4 w-4"))
                                                 }
@@ -231,7 +226,7 @@ fn vista(
                                         @for dia in dias {
                                             @let consumo = &fila.dias[fechas::indice_dia(*dia)];
                                             td class="p-0 text-sm text-gray-500 w-40 align-top border-r border-gray-200" {
-                                                a href=(format!("/consumos/{id}?fecha={}&grado={id_grado}", fechas::iso(*dia)))
+                                                a href=(format!("/consumos/{id}?fecha={}&grado={id_grado}", *dia))
                                                     class="flex h-full min-h-[180px] flex-col rounded-sm p-1 transition-colors hover:bg-blue-50" {
                                                     div class="grid flex-grow grid-cols-3 content-start gap-1" {
                                                         @for (producto, cantidad) in &consumo.productos {
@@ -253,7 +248,7 @@ fn vista(
                                         td class="w-20 bg-orange-50 px-2 py-4 text-right text-sm font-semibold whitespace-nowrap text-orange-700" { (soles(fila.subtotal())) }
                                         td class="w-20 bg-orange-50 px-2 py-4 text-right text-sm font-semibold whitespace-nowrap text-orange-700" { (soles(fila.deuda)) }
                                         td class="w-20 bg-amber-100 px-2 py-4 text-right text-sm font-semibold whitespace-nowrap text-red-800" {
-                                            a href=(url_pagos(id, lunes, Some(id_grado))) class="block rounded px-2 py-1 transition-colors hover:bg-amber-200" {
+                                            a href=(rutas::pagos(id, lunes, Some(id_grado))) class="block rounded px-2 py-1 transition-colors hover:bg-amber-200" {
                                                 @if es_cero(fila.pagos) { "-" } @else { (soles(fila.pagos)) }
                                             }
                                         }

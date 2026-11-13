@@ -133,9 +133,9 @@ pub fn resumen_diario(
          JOIN grados g      ON e.id_grado = g.id_grado
          JOIN productos p   ON c.id_producto = p.id_producto
          WHERE c.fecha_consumo = ?1
-           AND e.id_grado IN ({})
+           AND {}
          ORDER BY e.apellidos, e.nombres, p.nombre",
-        sector.grados_sql()
+        sector.condicion_sql()
     );
     let mut stmt = c.prepare_cached(&sql)?;
     stmt.query_map([fecha], |r| {

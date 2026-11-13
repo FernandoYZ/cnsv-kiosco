@@ -13,6 +13,7 @@ mod fechas;
 mod forms;
 mod pagos;
 mod productos;
+mod rutas;
 mod state;
 mod templates;
 #[cfg(test)]
