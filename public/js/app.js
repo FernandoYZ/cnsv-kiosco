@@ -219,12 +219,30 @@
     }
   });
 
-  // Weekly receipt rendered as a PNG image.
+  // Weekly receipt as a PNG, rendered with html-to-image (same library as the
+  // Go app): the browser renders the node, so Tailwind v4 `oklch()` colors work.
+  // The image is prepared as soon as the page loads, because browsers only
+  // allow sharing/copying right after the tap; rendering after the tap could
+  // let that permission expire.
   const receipt = document.getElementById('comprobante');
-  const receiptBlob = async () => {
-    const canvas = await html2canvas(receipt, { scale: 2, backgroundColor: '#ffffff' });
-    return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  let receiptPromise = null;
+  const renderReceipt = () => htmlToImage.toBlob(receipt, { pixelRatio: 2, backgroundColor: '#ffffff' });
+  const getReceipt = () => {
+    if (!receiptPromise) {
+      receiptPromise = (async () => {
+        if (typeof htmlToImage === 'undefined') throw new Error('html-to-image is not loaded');
+        await document.fonts.ready;
+        // Safari can miss web fonts on the first pass; the second render is reliable.
+        await renderReceipt();
+        return renderReceipt();
+      })();
+      receiptPromise.catch(() => { receiptPromise = null; });
+    }
+    return receiptPromise;
   };
+  if (receipt) {
+    window.addEventListener('load', () => getReceipt().catch((error) => console.error(error)));
+  }
 
   // Share the receipt image directly (mobile share sheet → WhatsApp, etc.).
   const shareButton = document.querySelector('[data-share-receipt]');
@@ -234,15 +252,15 @@
       shareButton.hidden = false;
       const label = shareButton.querySelector('span');
       shareButton.addEventListener('click', async () => {
-        if (typeof html2canvas !== 'function') return;
-        label.textContent = 'Generando…';
-        shareButton.disabled = true;
         try {
-          const file = new File([await receiptBlob()], shareButton.dataset.fileName, { type: 'image/png' });
+          const file = new File([await getReceipt()], shareButton.dataset.fileName, { type: 'image/png' });
           await navigator.share({ files: [file], text: shareButton.dataset.caption });
-        } catch (_) { /* cancelled */ }
-        label.textContent = '📤 Compartir';
-        shareButton.disabled = false;
+        } catch (error) {
+          if (error.name === 'AbortError') return; // user closed the share sheet
+          console.error(error);
+          label.textContent = '✗ Reintenta';
+          setTimeout(() => { label.textContent = '📤 Compartir'; }, 2000);
+        }
       });
     }
   }
@@ -254,14 +272,14 @@
     const setState = (text, busy) => { label.textContent = text; copyButton.disabled = busy; };
 
     copyButton.addEventListener('click', async () => {
-      if (typeof html2canvas !== 'function') { setState('✗ Error', false); return; }
       setState('Generando…', true);
       try {
-        const blob = await receiptBlob();
         if (navigator.clipboard && window.ClipboardItem) {
-          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          // Passing the promise keeps the tap's permission (required by Safari).
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': getReceipt() })]);
           setState('✓ Copiado', true);
         } else {
+          const blob = await getReceipt();
           const link = document.createElement('a');
           link.href = URL.createObjectURL(blob);
           link.download = copyButton.dataset.fileName || 'nota-venta.png';
