@@ -3,6 +3,9 @@
 # Tailwind CSS standalone CLI (~120 MB), installed locally per machine.
 /tailwindcss
 
+# Local credentials for manual testing.
+/credenciales.txt
+
 # Real school data: never commit the database or its SQLite side files.
 /database/*.db
 /database/*.db-wal
