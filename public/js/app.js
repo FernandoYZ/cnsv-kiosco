@@ -15,10 +15,32 @@
     }
   }
 
-  // <form data-confirm="..."> asks before submitting.
+  // Some browsers (Safari) restore pages from the back-forward cache even with
+  // `Cache-Control: no-store`; reload so data is never stale after going back.
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) location.reload();
+  });
+
+  // <form data-confirm="..."> asks before submitting; every POST form disables
+  // its buttons once sent so a double tap cannot submit twice.
   document.addEventListener('submit', (event) => {
-    const message = event.target.dataset.confirm;
-    if (message && !confirm(message)) event.preventDefault();
+    const form = event.target;
+    const message = form.dataset.confirm;
+    if (message && !confirm(message)) {
+      event.preventDefault();
+      return;
+    }
+    if (form.method.toLowerCase() === 'post') {
+      if (form.dataset.sent) {
+        event.preventDefault();
+        return;
+      }
+      form.dataset.sent = '1';
+      form.querySelectorAll('button[type="submit"]').forEach((button) => {
+        button.disabled = true;
+        button.classList.add('opacity-60');
+      });
+    }
   });
 
   // <button data-back> goes back in history.

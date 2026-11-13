@@ -33,6 +33,8 @@ pub struct PagoForm {
     monto: String,
     fecha_pago: String,
     grado: Option<String>,
+    /// One-time token issued with the form (see `envios`).
+    token: String,
 }
 
 #[derive(Deserialize)]
@@ -132,9 +134,11 @@ pub async fn gestion(
 ) -> Result<Markup, AppError> {
     let semana = semana(&state, id_estudiante, q.fecha.as_deref()).await?;
     let grado = grado_desde(q.grado.as_deref()).or(semana.estudiante.id_grado);
+    let token = state.envios_pago.nuevo_token();
     Ok(vista_gestion(
         &semana,
         grado,
+        &token,
         mensaje_flash(q.ok.as_deref()),
     ))
 }
@@ -146,7 +150,19 @@ pub async fn registrar(
 ) -> Result<Redirect, AppError> {
     let monto = forms::monto(&form.monto, "Monto")?;
     let fecha = forms::fecha(&form.fecha_pago, "Fecha")?;
-    let registrado = state
+    let token = forms::texto(&form.token, "Token", 64)?;
+    let grado = grado_desde(form.grado.as_deref());
+
+    // Same form submitted again (double tap, back + resubmit): do not pay twice.
+    if !state.envios_pago.consumir(&token) {
+        tracing::warn!(id_estudiante, "duplicate payment submission ignored");
+        return Ok(Redirect::to(&format!(
+            "{}&ok=pago-duplicado",
+            url_pagos(id_estudiante, fecha, grado)
+        )));
+    }
+
+    let resultado = state
         .db
         .call(move |c| {
             if estudiantes::repository::por_id(c, id_estudiante)?.is_none() {
@@ -155,15 +171,21 @@ pub async fn registrar(
             repository::registrar(c, id_estudiante, monto, fecha)?;
             Ok(true)
         })
-        .await?;
-    if !registrado {
-        return Err(AppError::NotFound);
+        .await;
+    match resultado {
+        Ok(true) => Ok(Redirect::to(&format!(
+            "{}&ok=pago",
+            url_pagos(id_estudiante, fecha, grado)
+        ))),
+        Ok(false) => {
+            state.envios_pago.liberar(&token);
+            Err(AppError::NotFound)
+        }
+        Err(err) => {
+            state.envios_pago.liberar(&token);
+            Err(err.into())
+        }
     }
-    let grado = grado_desde(form.grado.as_deref());
-    Ok(Redirect::to(&format!(
-        "{}&ok=pago",
-        url_pagos(id_estudiante, fecha, grado)
-    )))
 }
 
 pub async fn eliminar(
@@ -194,7 +216,7 @@ fn color_saldo(total: f64) -> &'static str {
     }
 }
 
-fn vista_gestion(semana: &Semana, grado: Option<i64>, flash: Option<&str>) -> Markup {
+fn vista_gestion(semana: &Semana, grado: Option<i64>, token: &str, flash: Option<&str>) -> Markup {
     let id = semana.estudiante.id;
     let total = semana.total();
     let pagado = semana.pagado();
@@ -234,14 +256,14 @@ fn vista_gestion(semana: &Semana, grado: Option<i64>, flash: Option<&str>) -> Ma
                     aside class="mb-10 lg:sticky lg:top-24 lg:col-span-5 lg:mb-0" {
                         h3 class="section-title font-medium" { "Registrar nuevo pago" }
                         div class="ios-card" {
-                            form method="post" action=(format!("/pagos/{id}")) class="divide-y divide-gray-100" {
+                            form method="post" action=(format!("/pagos/{id}")) autocomplete="off" class="divide-y divide-gray-100" {
+                                input type="hidden" name="token" value=(token);
                                 @if let Some(g) = grado { input type="hidden" name="grado" value=(g); }
                                 div class="ios-row" {
                                     label for="monto" class="ios-label text-gray-600" { "Monto" }
                                     div class="flex flex-1 items-center" {
                                         span class="mr-1 text-[19px] font-semibold text-gray-400" { "S/" }
-                                        input type="number" name="monto" id="monto" step="0.01" min="0.01" placeholder="0.00" required inputmode="decimal"
-                                            value=[(total > 0.005).then(|| monto(total))]
+                                        input type="number" name="monto" id="monto" step="0.01" min="0.01" placeholder="0.00" required inputmode="decimal" autofocus
                                             class="ios-input text-[20px] font-bold tabular-nums text-ios-blue";
                                     }
                                 }

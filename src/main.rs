@@ -40,7 +40,10 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), StartupError> {
     let config = Config::load()?;
     let db = db::open(&config.database.path).await?;
-    let state = AppState { db: db.clone() };
+    let state = AppState {
+        db: db.clone(),
+        envios_pago: Default::default(),
+    };
 
     let listener = TcpListener::bind(config.server.address).await?;
     tracing::info!(address = %config.server.address, "server listening");

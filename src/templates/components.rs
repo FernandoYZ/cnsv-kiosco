@@ -163,6 +163,7 @@ pub fn mensaje_flash(codigo: Option<&str>) -> Option<&'static str> {
     Some(match codigo? {
         "consumo" => "Consumo guardado",
         "pago" => "Abono registrado",
+        "pago-duplicado" => "Ese abono ya estaba registrado: no se guardó de nuevo",
         "pago-eliminado" => "Pago eliminado",
         "estudiante-creado" => "Estudiante registrado",
         "estudiante-actualizado" => "Estudiante actualizado",

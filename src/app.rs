@@ -1,12 +1,12 @@
 use axum::{
     Router,
     extract::{Path, State},
-    http::{StatusCode, header},
+    http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
 use rust_embed::RustEmbed;
-use tower_http::trace::TraceLayer;
+use tower_http::{set_header::SetResponseHeaderLayer, trace::TraceLayer};
 
 use crate::{
     consumos, dashboard, db, error::AppError, estudiantes, pagos, productos, state::AppState,
@@ -60,10 +60,16 @@ pub fn router(state: AppState) -> Router {
             "/productos/{id}/estado",
             post(productos::handler::cambiar_estado),
         )
-        // Infrastructure
         .route("/health", get(health))
-        .route("/public/{*path}", get(public_asset))
         .fallback(|| async { AppError::NotFound })
+        // Dynamic pages must never come from the browser cache: going back
+        // after a POST would show stale data and invite a duplicate submit.
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-store"),
+        ))
+        // Added after the layer above, so static assets stay cacheable.
+        .route("/public/{*path}", get(public_asset))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

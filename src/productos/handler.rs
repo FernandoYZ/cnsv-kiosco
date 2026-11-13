@@ -168,7 +168,7 @@ fn vista(productos: &[Producto], editar: Option<i64>, flash: Option<&str>) -> Ma
                     aside class="mb-10 lg:sticky lg:top-24 lg:col-span-5 lg:mb-0" {
                         h3 class="section-title font-medium" { "Nuevo producto" }
                         div class="ios-card" {
-                            form method="post" action="/productos" class="divide-y divide-gray-100" {
+                            form method="post" action="/productos" autocomplete="off" class="divide-y divide-gray-100" {
                                 div class="ios-row" {
                                     label for="new-name" class="ios-label" { "Nombre" }
                                     input id="new-name" type="text" name="nombre" placeholder="Ej. Gelatina" required maxlength="100" class="ios-input";

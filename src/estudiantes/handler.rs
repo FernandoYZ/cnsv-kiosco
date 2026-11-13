@@ -244,7 +244,7 @@ fn vista(
                     aside class="mb-10 lg:sticky lg:top-24 lg:col-span-5" {
                         h3 class="section-title" { "Nuevo registro" }
                         div class="ios-card rounded-[32px]" {
-                            form method="post" action="/estudiantes" class="divide-y divide-gray-100" {
+                            form method="post" action="/estudiantes" autocomplete="off" class="divide-y divide-gray-100" {
                                 (campo_filtro(filtro))
                                 div class="ios-row" {
                                     label for="new-last" class="ios-label w-20" { "Apellidos" }
