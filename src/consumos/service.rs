@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::NaiveDate;
-use tokio_rusqlite::rusqlite::{self, Connection};
+use tokio_rusqlite::rusqlite::{self, Connection, TransactionBehavior};
 
 use super::repository;
 use crate::{estudiantes, productos};
@@ -18,7 +18,9 @@ pub fn guardar_dia(
     fecha: NaiveDate,
     cantidades: &[(i64, i64)],
 ) -> rusqlite::Result<Option<usize>> {
-    let tx = c.transaction()?;
+    // IMMEDIATE takes the write lock up front, so another process writing the
+    // same file cannot invalidate this read-then-write sequence midway.
+    let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
 
     match estudiantes::repository::por_id(&tx, id_estudiante)? {
         Some(estudiante) if estudiante.esta_activo => {}

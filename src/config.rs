@@ -10,6 +10,27 @@ const DEFAULT_CONFIG_PATH: &str = "config/default.toml";
 pub struct Config {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
+    #[serde(default)]
+    pub backup: BackupConfig,
+}
+
+/// Daily database copies (see `backup.rs`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct BackupConfig {
+    /// Folder for `database-YYYY-MM-DD.db` copies.
+    pub directorio: PathBuf,
+    /// How many daily copies to keep (older ones are deleted).
+    pub conservar: usize,
+}
+
+impl Default for BackupConfig {
+    fn default() -> Self {
+        Self {
+            directorio: PathBuf::from("database/backups"),
+            conservar: 30,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -46,6 +67,15 @@ impl Config {
         }
         if let Ok(value) = env::var("KIOSCO_DATABASE_PATH") {
             self.database.path = PathBuf::from(value);
+        }
+        if let Ok(value) = env::var("KIOSCO_BACKUP_DIR") {
+            self.backup.directorio = PathBuf::from(value);
+        }
+        if self.backup.conservar == 0 {
+            return Err(StartupError::InvalidEnv {
+                name: "backup.conservar",
+                value: "0 (must keep at least one copy)".to_owned(),
+            });
         }
         Ok(())
     }

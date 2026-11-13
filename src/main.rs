@@ -1,5 +1,6 @@
 mod app;
 mod assets;
+mod backup;
 mod cierre;
 mod cobranza;
 mod config;
@@ -45,6 +46,7 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), StartupError> {
     let config = Config::load()?;
     let db = db::open(&config.database.path).await?;
+    backup::programar(db.clone(), config.backup.clone());
     let state = AppState {
         db: db.clone(),
         envios_pago: Default::default(),
