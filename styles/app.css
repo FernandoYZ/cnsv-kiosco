@@ -1,0 +1,9 @@
+/*
+ * Tailwind CSS source. Compiled output: public/css/app.css
+ *   ./tailwindcss -i styles/app.css -o public/css/app.css --minify
+ *   ./tailwindcss -i styles/app.css -o public/css/app.css --watch
+ */
+@import "tailwindcss";
+
+/* Maud templates live in Rust files. */
+@source "../src";

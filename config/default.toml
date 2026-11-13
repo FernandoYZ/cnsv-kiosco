@@ -1,0 +1,10 @@
+# Default configuration. Every value can be overridden with environment variables:
+#   KIOSCO_CONFIG          path to this file (default: config/default.toml)
+#   KIOSCO_SERVER_ADDRESS  e.g. 127.0.0.1:3000
+#   KIOSCO_DATABASE_PATH   e.g. /opt/cnsv-kiosco/database/database.db
+
+[server]
+address = "127.0.0.1:3000"
+
+[database]
+path = "database/database.db"

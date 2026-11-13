@@ -1,0 +1,9 @@
+/target
+
+# Tailwind CSS standalone CLI (~120 MB), installed locally per machine.
+/tailwindcss
+
+# Real school data: never commit the database or its SQLite side files.
+/database/*.db
+/database/*.db-wal
+/database/*.db-shm
