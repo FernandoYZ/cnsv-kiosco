@@ -1,5 +1,7 @@
 use maud::{DOCTYPE, Markup, html};
 
+use crate::assets;
+
 /// Base HTML document. `flash` is shown as a toast that fades out.
 pub fn page(title: &str, flash: Option<&str>, content: Markup) -> Markup {
     html! {
@@ -15,12 +17,13 @@ pub fn page(title: &str, flash: Option<&str>, content: Markup) -> Markup {
                 meta name="apple-mobile-web-app-status-bar-style" content="default";
                 meta name="apple-mobile-web-app-title" content="Kiosco";
                 title { (title) " · Kiosco del Valle" }
-                link rel="icon" href="/public/images/favicon.webp" type="image/webp";
-                link rel="apple-touch-icon" href="/public/images/favicon.webp";
-                link rel="manifest" href="/public/manifest.json";
+                link rel="icon" href=(assets::url("images/favicon.webp")) type="image/webp";
+                link rel="apple-touch-icon" href=(assets::url("images/favicon.webp"));
+                link rel="manifest" href=(assets::url("manifest.json"));
+                // Same URL as the CSS `url(...)`, so the preload is reused.
                 link rel="preload" href="/public/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin;
-                link rel="stylesheet" href="/public/css/app.css";
-                script src="/public/js/app.js" defer {}
+                link rel="stylesheet" href=(assets::url("css/app.css"));
+                script src=(assets::url("js/app.js")) defer {}
             }
             body class="min-h-screen bg-ios-bg text-black antialiased" {
                 @if let Some(mensaje) = flash {

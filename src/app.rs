@@ -1,21 +1,22 @@
 use axum::{
     Router,
-    extract::{Path, State},
-    http::{HeaderValue, StatusCode, header},
-    response::{IntoResponse, Response},
+    extract::State,
+    http::{HeaderValue, header},
     routing::{get, post},
 };
-use rust_embed::RustEmbed;
-use tower_http::{set_header::SetResponseHeaderLayer, trace::TraceLayer};
-
-use crate::{
-    consumos, dashboard, db, error::AppError, estudiantes, pagos, productos, state::AppState,
+use tower_http::{
+    compression::{
+        CompressionLayer,
+        predicate::{DefaultPredicate, NotForContentType, Predicate},
+    },
+    set_header::SetResponseHeaderLayer,
+    trace::TraceLayer,
 };
 
-/// Files under `public/`, embedded into the release binary.
-#[derive(RustEmbed)]
-#[folder = "public/"]
-struct PublicAssets;
+use crate::{
+    assets, consumos, dashboard, db, error::AppError, estudiantes, pagos, productos,
+    state::AppState,
+};
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -69,7 +70,13 @@ pub fn router(state: AppState) -> Router {
             HeaderValue::from_static("no-store"),
         ))
         // Added after the layer above, so static assets stay cacheable.
-        .route("/public/{*path}", get(public_asset))
+        .route("/public/{*ruta}", get(assets::servir))
+        // HTML and CSS shrink ~10x with gzip; fonts and images are already compressed.
+        .layer(
+            CompressionLayer::new()
+                .gzip(true)
+                .compress_when(DefaultPredicate::new().and(NotForContentType::const_new("font/"))),
+        )
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
@@ -77,14 +84,4 @@ pub fn router(state: AppState) -> Router {
 async fn health(State(state): State<AppState>) -> Result<&'static str, AppError> {
     db::ping(&state.db).await?;
     Ok("ok")
-}
-
-async fn public_asset(Path(path): Path<String>) -> Response {
-    match PublicAssets::get(&path) {
-        Some(file) => {
-            let mime = file.metadata.mimetype().to_owned();
-            ([(header::CONTENT_TYPE, mime)], file.data).into_response()
-        }
-        None => StatusCode::NOT_FOUND.into_response(),
-    }
 }

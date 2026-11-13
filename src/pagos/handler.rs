@@ -10,6 +10,7 @@ use tokio_rusqlite::rusqlite::{self, Connection};
 
 use super::{Pago, repository};
 use crate::{
+    assets,
     consumos::{self, repository::ConsumoDetalle},
     error::AppError,
     estudiantes::{self, Estudiante, grado_desde},
@@ -357,7 +358,7 @@ fn vista_comprobante(semana: &Semana, grado: Option<i64>) -> Markup {
         &format!("Comprobante - {nombre}"),
         None,
         html! {
-            script src="/public/js/vendor/html2canvas.min.js" defer {}
+            script src=(assets::url("js/vendor/html2canvas.min.js")) defer {}
             main class="mx-auto max-w-2xl p-2 sm:p-4" {
                 div class="mb-4 flex items-center justify-between gap-3" {
                     a href=(url_semana(semana.lunes, grado)) class="rounded-lg border border-gray-200/50 bg-white/70 px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm backdrop-blur-md transition-all duration-150 hover:bg-white/90 active:scale-95" { "← Volver" }
