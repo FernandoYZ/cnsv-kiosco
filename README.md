@@ -68,7 +68,7 @@ Los valores por defecto están en `config/default.toml`. Cada uno se puede sobre
 cargo test                    # Tests (base SQLite en memoria con el esquema real)
 cargo clippy --all-targets    # Lint
 cargo fmt                     # Formato
-cargo build --release         # Binario de producción en target/release/
+cargo build --release         # Binario de producción: target/release/cnsv-kiosco
 ```
 
 ### Base de datos
