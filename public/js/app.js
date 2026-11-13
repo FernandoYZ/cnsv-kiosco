@@ -312,4 +312,9 @@
       setTimeout(() => setState('📋 Copiar', false), 2000);
     });
   }
+
+  // Service worker: lets Chrome and Samsung Internet install the app (not a shortcut).
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch((error) => console.error(error));
+  }
 })();

@@ -97,6 +97,7 @@ pub fn router(state: AppState) -> Router {
         ))
         // Added after the layer above, so static assets stay cacheable.
         .route("/public/{*ruta}", get(assets::servir))
+        .route("/sw.js", get(assets::service_worker))
         // HTML and CSS shrink ~10x with gzip; fonts and images are already compressed.
         .layer(
             CompressionLayer::new()
@@ -1043,5 +1044,25 @@ mod tests {
             html.contains(r#"href="/""#),
             "editors keep the Inicio button"
         );
+    }
+
+    #[tokio::test]
+    async fn la_pwa_es_instalable_con_service_worker_e_iconos_png() {
+        let app = router(estado().await);
+        let sw = enviar(&app, get("", "/sw.js")).await;
+        assert_eq!(sw.status(), StatusCode::OK, "public, no login needed");
+        assert!(cabecera(&sw, header::CONTENT_TYPE).contains("javascript"));
+        assert_eq!(cabecera(&sw, header::CACHE_CONTROL), "no-cache");
+        assert!(sw.headers().get(header::SET_COOKIE).is_none());
+        assert!(texto(sw).await.contains("addEventListener('fetch'"));
+
+        let manifest = texto(enviar(&app, get("", "/public/manifest.json")).await).await;
+        for icono in ["icon-192.png", "icon-512.png", "icon-maskable-512.png"] {
+            assert!(manifest.contains(icono), "{icono}");
+            let png = enviar(&app, get("", &format!("/public/images/{icono}"))).await;
+            assert_eq!(png.status(), StatusCode::OK, "{icono}");
+            assert_eq!(cabecera(&png, header::CONTENT_TYPE), "image/png");
+        }
+        assert!(manifest.contains(r#""purpose": "maskable""#));
     }
 }

@@ -35,6 +35,22 @@ pub fn url(ruta: &str) -> String {
     }
 }
 
+/// `GET /sw.js`. Served from the root so its scope covers the whole app, and
+/// revalidated on every visit so an updated worker is picked up at once.
+pub async fn service_worker() -> Response {
+    let Some(archivo) = PublicAssets::get("sw.js") else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    (
+        [
+            (header::CONTENT_TYPE, "text/javascript; charset=utf-8"),
+            (header::CACHE_CONTROL, "no-cache"),
+        ],
+        archivo.data,
+    )
+        .into_response()
+}
+
 /// `GET /public/{*ruta}`
 pub async fn servir(
     Path(ruta): Path<String>,
