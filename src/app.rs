@@ -1025,4 +1025,23 @@ mod tests {
         let r = enviar(&app, login("especial", codificada)).await;
         assert_eq!(redirige_a(&r), Some("/"));
     }
+
+    #[tokio::test]
+    async fn sin_permiso_de_edicion_no_hay_enlaces_a_inicio() {
+        let estado = estado().await;
+        let kiosco = cookies(&estado, false);
+        let jenny = editor(&estado);
+        let app = router(estado);
+
+        for ruta in ["/registro", "/productos"] {
+            let html = texto(enviar(&app, get(&kiosco, ruta)).await).await;
+            assert!(!html.contains(r#"href="/""#), "{ruta} links to Inicio");
+            assert!(html.contains(r#"href="/logout""#) || ruta != "/registro");
+        }
+        let html = texto(enviar(&app, get(&jenny, "/registro")).await).await;
+        assert!(
+            html.contains(r#"href="/""#),
+            "editors keep the Inicio button"
+        );
+    }
 }

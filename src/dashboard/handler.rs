@@ -156,12 +156,12 @@ fn cabecera(lunes: NaiveDate, id_grado: i64) -> Markup {
                     (herramienta("/estudiantes", Icono::Estudiantes, "ALUMNOS"))
                     (herramienta("/productos", Icono::Productos, "PRODUCTOS"))
                     (herramienta("/cobranza", Icono::Dinero, "COBRANZA"))
-                    (herramienta("/cierre", Icono::Portapapeles, "CIERRE"))
+                    (herramienta("/cierre", Icono::Calculadora, "CIERRE"))
                     a href="/registro" class="flex items-center gap-2 rounded-[0.9rem] bg-blue-600 px-5 py-2.5 text-[11px] font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700 active:scale-95" {
                         (icono(Icono::Registro, "h-4 w-4")) span { "REGISTRO" }
                     }
-                    a href="/logout" title="Cerrar sesión" class="flex items-center gap-2 rounded-[0.9rem] px-4 py-2.5 text-[11px] font-bold text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900" {
-                        (icono(Icono::Salir, "h-4 w-4")) span { "SALIR" }
+                    a href="/logout" title="Cerrar sesión" aria-label="Cerrar sesión" class="flex items-center rounded-[0.9rem] px-3 py-2.5 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900" {
+                        (icono(Icono::Salir, "h-5 w-5"))
                     }
                 }
             }

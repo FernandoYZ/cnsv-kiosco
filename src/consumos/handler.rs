@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use axum::{
-    Form,
+    Extension, Form,
     extract::{Path, Query, State},
     response::Redirect,
 };
@@ -12,6 +12,7 @@ use tokio_rusqlite::rusqlite;
 
 use super::{repository, repository::LineaResumen, service};
 use crate::{
+    auth::sesion::Sesion,
     error::AppError,
     estudiantes::{self, Estudiante, Sector, grado_desde},
     fechas, forms,
@@ -56,7 +57,13 @@ fn url_volver(sector: Option<Sector>, grado: Option<i64>, fecha: NaiveDate) -> S
 }
 
 /// `/registro`: choose the work area.
-pub async fn inicio() -> Markup {
+/// `/registro`: home of users without edit permission, so they get no Inicio link.
+pub async fn inicio(Extension(sesion): Extension<Sesion>) -> Markup {
+    let marca = if sesion.puede_editar {
+        "/"
+    } else {
+        "/registro"
+    };
     let tarjeta = |href: &str,
                    ico: Icono,
                    color: &str,
@@ -82,11 +89,13 @@ pub async fn inicio() -> Markup {
         html! {
             nav class="ios-nav" {
                 div class="mx-auto flex max-w-5xl items-center justify-between" {
-                    a href="/" class="text-[15px] font-bold tracking-tight text-gray-900" { "Kiosco " span class="text-ios-blue" { "del Valle" } }
+                    a href=(marca) class="text-[15px] font-bold tracking-tight text-gray-900" { "Kiosco " span class="text-ios-blue" { "del Valle" } }
                     div class="flex items-center gap-4" {
-                        a href="/" class="ios-link text-[15px] font-medium" {
-                            span { "Inicio" }
-                            (icono(Icono::Inicio, "ml-2 h-5 w-5"))
+                        @if sesion.puede_editar {
+                            a href="/" class="ios-link text-[15px] font-medium" {
+                                span { "Inicio" }
+                                (icono(Icono::Inicio, "ml-2 h-5 w-5"))
+                            }
                         }
                         a href="/logout" class="inline-flex items-center gap-1.5 text-[15px] font-medium text-ios-gray" {
                             (icono(Icono::Salir, "h-5 w-5")) span { "Salir" }

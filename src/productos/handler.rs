@@ -1,5 +1,5 @@
 use axum::{
-    Form,
+    Extension, Form,
     extract::{Path, Query, State},
     response::Redirect,
 };
@@ -8,6 +8,7 @@ use serde::Deserialize;
 
 use super::{Producto, repository};
 use crate::{
+    auth::sesion::Sesion,
     error::AppError,
     forms,
     state::AppState,
@@ -45,10 +46,22 @@ fn validar(form: &ProductoForm) -> Result<(String, f64), AppError> {
 
 pub async fn listar(
     State(state): State<AppState>,
+    Extension(sesion): Extension<Sesion>,
     Query(q): Query<ListaQuery>,
 ) -> Result<Markup, AppError> {
     let productos = state.db.call(|c| repository::todos(c)).await?;
-    Ok(vista(&productos, q.editar, mensaje_flash(q.ok.as_deref())))
+    // Users without edit permission have no Inicio: their home is `/registro`.
+    let volver = if sesion.puede_editar {
+        "/"
+    } else {
+        "/registro"
+    };
+    Ok(vista(
+        &productos,
+        q.editar,
+        mensaje_flash(q.ok.as_deref()),
+        volver,
+    ))
 }
 
 pub async fn crear(
@@ -153,13 +166,13 @@ fn fila_edicion(p: &Producto) -> Markup {
     }
 }
 
-fn vista(productos: &[Producto], editar: Option<i64>, flash: Option<&str>) -> Markup {
+fn vista(productos: &[Producto], editar: Option<i64>, flash: Option<&str>, volver: &str) -> Markup {
     let activos = productos.iter().filter(|p| p.esta_activo).count();
     layout::page(
         "Productos",
         flash,
         html! {
-            (ios_nav(("/", "Atrás"), "Configuración de Productos", html! {}))
+            (ios_nav((volver, "Atrás"), "Configuración de Productos", html! {}))
             main class="mx-auto max-w-2xl px-4 pt-6 pb-10 lg:max-w-6xl" {
                 (encabezado("Productos", "Catálogo general del kiosco"))
                 div class="lg:grid lg:grid-cols-12 lg:items-start lg:gap-10" {
@@ -204,7 +217,7 @@ fn vista(productos: &[Producto], editar: Option<i64>, flash: Option<&str>) -> Ma
                             }
                         }
                         div class="mt-8 px-4 lg:hidden" {
-                            a href="/" class="block w-full rounded-2xl bg-gray-900 py-4 text-center font-bold text-white transition-all active:scale-[0.98]" { "Volver al Sistema" }
+                            a href=(volver) class="block w-full rounded-2xl bg-gray-900 py-4 text-center font-bold text-white transition-all active:scale-[0.98]" { "Volver al Sistema" }
                         }
                     }
                 }
