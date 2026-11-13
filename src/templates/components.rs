@@ -21,6 +21,7 @@ pub enum Icono {
     Portapapeles,
     Alerta,
     Compartir,
+    Salir,
 }
 
 fn trazos(icono: Icono) -> &'static str {
@@ -66,6 +67,9 @@ fn trazos(icono: Icono) -> &'static str {
         }
         Icono::Compartir => {
             r#"<path opacity="0.5" stroke="currentColor" stroke-linecap="round" stroke-width="2" d="M4 13v4a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-4"/><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15V4m0 0L8 8m4-4 4 4"/>"#
+        }
+        Icono::Salir => {
+            r#"<path opacity="0.5" stroke="currentColor" stroke-linecap="round" stroke-width="2" d="M14 4h3a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3h-3"/><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H4m0 0 4-4m-4 4 4 4"/>"#
         }
     }
 }

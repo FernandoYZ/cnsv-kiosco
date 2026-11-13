@@ -1,5 +1,6 @@
 mod app;
 mod assets;
+mod auth;
 mod backup;
 mod cierre;
 mod cobranza;
@@ -19,12 +20,12 @@ mod templates;
 #[cfg(test)]
 mod test_support;
 
-use std::process::ExitCode;
+use std::{net::SocketAddr, process::ExitCode};
 
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
 
-use crate::{config::Config, error::StartupError, state::AppState};
+use crate::{auth::Auth, config::Config, error::StartupError, state::AppState};
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -51,14 +52,19 @@ async fn run() -> Result<(), StartupError> {
     let state = AppState {
         db: db.clone(),
         envios_pago: Default::default(),
+        auth: Auth::new(config.auth.cookie_segura),
     };
 
     let listener = TcpListener::bind(config.server.address).await?;
     tracing::info!(address = %config.server.address, "server listening");
 
-    axum::serve(listener, app::router(state))
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(
+        listener,
+        // Peer address for the login rate limit when there is no proxy.
+        app::router(state).into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
 
     db.close().await?;
     tracing::info!("server stopped");

@@ -83,9 +83,14 @@ pub async fn inicio() -> Markup {
             nav class="ios-nav" {
                 div class="mx-auto flex max-w-5xl items-center justify-between" {
                     a href="/" class="text-[15px] font-bold tracking-tight text-gray-900" { "Kiosco " span class="text-ios-blue" { "del Valle" } }
-                    a href="/" class="ios-link text-[15px] font-medium" {
-                        span { "Inicio" }
-                        (icono(Icono::Inicio, "ml-2 h-5 w-5"))
+                    div class="flex items-center gap-4" {
+                        a href="/" class="ios-link text-[15px] font-medium" {
+                            span { "Inicio" }
+                            (icono(Icono::Inicio, "ml-2 h-5 w-5"))
+                        }
+                        a href="/logout" class="inline-flex items-center gap-1.5 text-[15px] font-medium text-ios-gray" {
+                            (icono(Icono::Salir, "h-5 w-5")) span { "Salir" }
+                        }
                     }
                 }
             }

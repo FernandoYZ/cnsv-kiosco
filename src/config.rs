@@ -12,6 +12,16 @@ pub struct Config {
     pub database: DatabaseConfig,
     #[serde(default)]
     pub backup: BackupConfig,
+    #[serde(default)]
+    pub auth: AuthConfig,
+}
+
+/// Login cookies.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct AuthConfig {
+    /// Adds `Secure` to cookies. Turn on in production (HTTPS behind Caddy).
+    pub cookie_segura: bool,
 }
 
 /// Daily database copies (see `backup.rs`).
@@ -70,6 +80,12 @@ impl Config {
         }
         if let Ok(value) = env::var("KIOSCO_BACKUP_DIR") {
             self.backup.directorio = PathBuf::from(value);
+        }
+        if let Ok(value) = env::var("KIOSCO_COOKIE_SECURE") {
+            self.auth.cookie_segura = value.parse().map_err(|_| StartupError::InvalidEnv {
+                name: "KIOSCO_COOKIE_SECURE",
+                value,
+            })?;
         }
         Ok(())
     }

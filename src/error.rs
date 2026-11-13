@@ -45,6 +45,9 @@ pub enum AppError {
     BadRequest(String),
     #[error("not found")]
     NotFound,
+    /// POST without the CSRF token of the browser session.
+    #[error("invalid CSRF token")]
+    CsrfInvalido,
 }
 
 impl IntoResponse for AppError {
@@ -63,6 +66,12 @@ impl IntoResponse for AppError {
                 StatusCode::NOT_FOUND,
                 "Página no encontrada",
                 "El recurso que buscas no existe o fue movido.".to_owned(),
+            ),
+            AppError::CsrfInvalido => (
+                StatusCode::FORBIDDEN,
+                "Token de seguridad expirado",
+                "El token de seguridad ha expirado. Recarga la página e intenta de nuevo."
+                    .to_owned(),
             ),
         };
 

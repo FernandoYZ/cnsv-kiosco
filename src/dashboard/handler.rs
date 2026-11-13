@@ -134,6 +134,9 @@ fn cabecera(lunes: NaiveDate, id_grado: i64) -> Markup {
                         (desde) span class="mx-1 text-gray-300" { "—" } (hasta)
                     }
                 }
+                a href="/logout" class="mt-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-ios-gray lg:hidden" {
+                    (icono(Icono::Salir, "h-4 w-4")) "Cerrar sesión"
+                }
             }
             div class="order-first flex flex-col items-center justify-center lg:order-none" {
                 div class="inline-flex gap-2 rounded-2xl border border-gray-200/40 bg-gray-100/80 p-1 shadow-inner backdrop-blur-sm" {
@@ -156,6 +159,9 @@ fn cabecera(lunes: NaiveDate, id_grado: i64) -> Markup {
                     (herramienta("/cierre", Icono::Portapapeles, "CIERRE"))
                     a href="/registro" class="flex items-center gap-2 rounded-[0.9rem] bg-blue-600 px-5 py-2.5 text-[11px] font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700 active:scale-95" {
                         (icono(Icono::Registro, "h-4 w-4")) span { "REGISTRO" }
+                    }
+                    a href="/logout" title="Cerrar sesión" class="flex items-center gap-2 rounded-[0.9rem] px-4 py-2.5 text-[11px] font-bold text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900" {
+                        (icono(Icono::Salir, "h-4 w-4")) span { "SALIR" }
                     }
                 }
             }

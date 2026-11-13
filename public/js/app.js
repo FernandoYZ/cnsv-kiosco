@@ -65,6 +65,12 @@
     return copy;
   };
 
+  // CSRF token of the browser session (double-submit cookie set by the server).
+  const csrfToken = () => {
+    const match = document.cookie.match(/(?:^|;\s*)kiosco_csrf=([^;]+)/);
+    return match ? match[1] : '';
+  };
+
   document.addEventListener('submit', async (event) => {
     const form = event.target;
     const message = form.dataset.confirm;
@@ -85,10 +91,22 @@
 
     let response;
     try {
-      response = await fetch(form.action, { method: 'POST', body, credentials: 'same-origin' });
+      response = await fetch(form.action, {
+        method: 'POST',
+        body,
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': csrfToken() },
+      });
     } catch (_) {
       // Network failure: fall back to a regular submission.
       delete form.dataset.sent;
+      if (!form.elements.csrf_token) {
+        const field = document.createElement('input');
+        field.type = 'hidden';
+        field.name = 'csrf_token';
+        field.value = csrfToken();
+        form.append(field);
+      }
       form.submit();
       return;
     }

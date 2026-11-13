@@ -3,6 +3,7 @@
 #   KIOSCO_SERVER_ADDRESS  e.g. 127.0.0.1:3000
 #   KIOSCO_DATABASE_PATH   e.g. /opt/cnsv-kiosco/database/database.db
 #   KIOSCO_BACKUP_DIR      e.g. /opt/cnsv-kiosco/database/backups
+#   KIOSCO_COOKIE_SECURE   true in production (HTTPS), so cookies carry `Secure`
 
 [server]
 address = "127.0.0.1:3000"
@@ -14,3 +15,7 @@ path = "database/database.db"
 [backup]
 directorio = "database/backups"
 conservar = 30
+
+# Login cookies. Set `cookie_segura = true` when served over HTTPS.
+[auth]
+cookie_segura = false

@@ -3,7 +3,14 @@
 
 use tokio_rusqlite::rusqlite::Connection;
 
-use crate::{pagos::envios::EnviosRecientes, state::AppState};
+use crate::{
+    auth::{Auth, password},
+    pagos::envios::EnviosRecientes,
+    state::AppState,
+};
+
+/// Test users: `jenny` (id 1, can edit) and `kiosco` (id 2, consumption only).
+pub const CLAVE: &str = "clave-de-prueba";
 
 /// Production schema, verbatim from `sqlite_master`.
 pub const ESQUEMA: &str = r#"
@@ -45,6 +52,12 @@ CREATE TABLE pagos (
     fecha_pago DATE NOT NULL,
     FOREIGN KEY (id_estudiante) REFERENCES estudiantes(id_estudiante)
 );
+CREATE TABLE usuarios (
+    id_usuario INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario TEXT NOT NULL UNIQUE,
+    contrasenha TEXT NOT NULL,
+    puede_editar INTEGER NOT NULL DEFAULT 0
+);
 CREATE INDEX idx_consumos_estudiante_fecha ON consumos(id_estudiante, fecha_consumo);
 CREATE INDEX idx_pagos_estudiante_fecha ON pagos(id_estudiante, fecha_pago);
 CREATE INDEX idx_estudiantes_activo ON estudiantes(esta_activo) WHERE esta_activo = 1;
@@ -77,6 +90,12 @@ pub fn preparar(c: &Connection) {
 pub fn preparar_heredada(c: &Connection) {
     c.execute_batch(ESQUEMA).expect("schema");
     c.execute_batch(DATOS).expect("seed");
+    let hash = password::generar(CLAVE, &[1; 16]);
+    c.execute(
+        "INSERT INTO usuarios VALUES (1, 'jenny', ?1, 1), (2, 'kiosco', ?1, 0)",
+        [&hash],
+    )
+    .expect("users");
     c.pragma_update(None, "foreign_keys", "ON").expect("pragma");
 }
 
@@ -105,6 +124,7 @@ pub async fn estado() -> AppState {
     AppState {
         db,
         envios_pago: EnviosRecientes::default(),
+        auth: Auth::new(false),
     }
 }
 
