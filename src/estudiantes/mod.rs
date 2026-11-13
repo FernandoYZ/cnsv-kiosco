@@ -63,6 +63,13 @@ pub fn grado_valido(id: i64) -> bool {
     GRADOS.iter().any(|g| g.id == id)
 }
 
+/// Parses a grade id from a query string; `None` when missing or unknown.
+pub fn grado_desde(valor: Option<&str>) -> Option<i64> {
+    valor
+        .and_then(|v| v.trim().parse().ok())
+        .filter(|id| grado_valido(*id))
+}
+
 /// Kiosk sectors: `menor` = grades 1–4, `mayor` = grades 5–7.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sector {
@@ -71,13 +78,11 @@ pub enum Sector {
 }
 
 impl Sector {
-    pub const TODOS: [Sector; 2] = [Sector::Menor, Sector::Mayor];
-
-    /// Unknown or missing values default to `menor`.
-    pub fn desde(valor: Option<&str>) -> Self {
+    pub fn desde(valor: &str) -> Option<Self> {
         match valor {
-            Some("mayor") => Sector::Mayor,
-            _ => Sector::Menor,
+            "menor" => Some(Sector::Menor),
+            "mayor" => Some(Sector::Mayor),
+            _ => None,
         }
     }
 
@@ -90,9 +95,17 @@ impl Sector {
 
     pub fn nombre(self) -> &'static str {
         match self {
-            Sector::Menor => "Sector menor (5to Prim. – 2do Sec.)",
-            Sector::Mayor => "Sector mayor (3ro – 5to Sec.)",
+            Sector::Menor => "Sector Menor",
+            Sector::Mayor => "Sector Mayor",
         }
+    }
+
+    pub fn grados(self) -> impl Iterator<Item = &'static Grado> {
+        let ids: &[i64] = match self {
+            Sector::Menor => &[1, 2, 3, 4],
+            Sector::Mayor => &[5, 6, 7],
+        };
+        GRADOS.iter().filter(move |g| ids.contains(&g.id))
     }
 
     /// SQL `IN` list built from constants, never from user input.

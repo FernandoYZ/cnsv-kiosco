@@ -22,7 +22,6 @@ pub struct LineaResumen {
 
 pub struct ConsumoDetalle {
     pub fecha: NaiveDate,
-    pub id_producto: i64,
     pub nombre_producto: String,
     pub cantidad: i64,
     pub total_linea: f64,
@@ -41,7 +40,6 @@ pub fn filas_de_celda(
          WHERE id_estudiante = ?1 AND id_producto = ?2 AND fecha_consumo = ?3
          ORDER BY id_consumo",
     )?;
-
     stmt.query_map(params![id_estudiante, id_producto, fecha], |r| {
         Ok(FilaCelda {
             id: r.get(0)?,
@@ -88,19 +86,35 @@ pub fn eliminar(c: &Connection, id_consumo: i64) -> rusqlite::Result<()> {
     Ok(())
 }
 
-/// Quantities of one day keyed by (student, product), to prefill the grid.
-pub fn cantidades_del_dia(
+/// Items (sum of quantities) per student on one day, for the sector list badges.
+pub fn items_por_estudiante(
     c: &Connection,
     fecha: NaiveDate,
-) -> rusqlite::Result<HashMap<(i64, i64), i64>> {
+) -> rusqlite::Result<HashMap<i64, i64>> {
     let mut stmt = c.prepare_cached(
-        "SELECT id_estudiante, id_producto, SUM(cantidad) FROM consumos
+        "SELECT id_estudiante, SUM(cantidad) FROM consumos
          WHERE fecha_consumo = ?1
-         GROUP BY id_estudiante, id_producto",
+         GROUP BY id_estudiante",
     )?;
-
-    stmt.query_map([fecha], |r| Ok(((r.get(0)?, r.get(1)?), r.get(2)?)))?
+    stmt.query_map([fecha], |r| Ok((r.get(0)?, r.get(1)?)))?
         .collect()
+}
+
+/// Quantity per product of one student on one day (prefills the editor).
+pub fn cantidades_de_estudiante(
+    c: &Connection,
+    id_estudiante: i64,
+    fecha: NaiveDate,
+) -> rusqlite::Result<HashMap<i64, i64>> {
+    let mut stmt = c.prepare_cached(
+        "SELECT id_producto, SUM(cantidad) FROM consumos
+         WHERE id_estudiante = ?1 AND fecha_consumo = ?2
+         GROUP BY id_producto",
+    )?;
+    stmt.query_map(params![id_estudiante, fecha], |r| {
+        Ok((r.get(0)?, r.get(1)?))
+    })?
+    .collect()
 }
 
 /// ObtenerResumenDiario.
@@ -124,7 +138,6 @@ pub fn resumen_diario(
         sector.grados_sql()
     );
     let mut stmt = c.prepare_cached(&sql)?;
-
     stmt.query_map([fecha], |r| {
         Ok(LineaResumen {
             id_estudiante: r.get(0)?,
@@ -146,20 +159,18 @@ pub fn de_estudiante_entre(
     fin: NaiveDate,
 ) -> rusqlite::Result<Vec<ConsumoDetalle>> {
     let mut stmt = c.prepare_cached(
-        "SELECT c.fecha_consumo, c.id_producto, p.nombre, c.cantidad, c.total_linea
+        "SELECT c.fecha_consumo, p.nombre, c.cantidad, c.total_linea
          FROM consumos c
          JOIN productos p ON p.id_producto = c.id_producto
          WHERE c.id_estudiante = ?1 AND c.fecha_consumo BETWEEN ?2 AND ?3
-         ORDER BY p.nombre, c.fecha_consumo",
+         ORDER BY c.fecha_consumo, p.nombre",
     )?;
-
     stmt.query_map(params![id_estudiante, inicio, fin], |r| {
         Ok(ConsumoDetalle {
             fecha: r.get(0)?,
-            id_producto: r.get(1)?,
-            nombre_producto: r.get(2)?,
-            cantidad: r.get(3)?,
-            total_linea: r.get(4)?,
+            nombre_producto: r.get(1)?,
+            cantidad: r.get(2)?,
+            total_linea: r.get(3)?,
         })
     })?
     .collect()

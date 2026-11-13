@@ -6,77 +6,137 @@ use axum::{
 use chrono::NaiveDate;
 use maud::{Markup, html};
 use serde::Deserialize;
-use tokio_rusqlite::rusqlite;
+use tokio_rusqlite::rusqlite::{self, Connection};
 
 use super::{Pago, repository};
 use crate::{
     consumos::{self, repository::ConsumoDetalle},
     error::AppError,
-    estudiantes::{self, Estudiante},
+    estudiantes::{self, Estudiante, grado_desde},
     fechas, forms,
     state::AppState,
     templates::{
-        components::{page_header, soles, soles_o_guion, stat},
+        components::{Icono, estado_vacio, icono, mensaje_flash, monto, soles},
         layout,
     },
 };
 
 #[derive(Deserialize)]
 pub struct SemanaQuery {
-    semana: Option<String>,
+    fecha: Option<String>,
+    grado: Option<String>,
+    ok: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct PagoForm {
     monto: String,
-    fecha: String,
+    fecha_pago: String,
+    grado: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct EliminarForm {
     semana: String,
+    grado: Option<String>,
 }
 
-struct Cuenta {
+/// Everything about one student for one week.
+struct Semana {
     estudiante: Estudiante,
+    lunes: NaiveDate,
     deuda_anterior: f64,
     consumos: Vec<ConsumoDetalle>,
     pagos: Vec<Pago>,
 }
 
-/// Weekly statement of one student: previous debt, consumption, payments, balance.
-pub async fn cuenta(
+impl Semana {
+    fn subtotal(&self) -> f64 {
+        self.consumos.iter().map(|c| c.total_linea).sum()
+    }
+
+    fn pagado(&self) -> f64 {
+        self.pagos.iter().map(|p| p.monto).sum()
+    }
+
+    fn total(&self) -> f64 {
+        self.deuda_anterior + self.subtotal() - self.pagado()
+    }
+}
+
+/// Loads the week (Monday–Sunday) that contains `fecha`.
+fn cargar_semana(
+    c: &Connection,
+    id_estudiante: i64,
+    fecha: NaiveDate,
+) -> rusqlite::Result<Option<Semana>> {
+    let Some(estudiante) = estudiantes::repository::por_id(c, id_estudiante)? else {
+        return Ok(None);
+    };
+    let lunes = fechas::lunes_de(fecha);
+    let domingo = fechas::sumar_dias(lunes, 6);
+    let deuda_anterior = consumos::repository::total_antes_de(c, id_estudiante, lunes)?
+        - repository::total_antes_de(c, id_estudiante, lunes)?;
+    Ok(Some(Semana {
+        estudiante,
+        lunes,
+        deuda_anterior,
+        consumos: consumos::repository::de_estudiante_entre(c, id_estudiante, lunes, domingo)?,
+        pagos: repository::de_estudiante_entre(c, id_estudiante, lunes, domingo)?,
+    }))
+}
+
+async fn semana(
+    state: &AppState,
+    id_estudiante: i64,
+    fecha: Option<&str>,
+) -> Result<Semana, AppError> {
+    let fecha = fechas::parse_o_hoy(fecha);
+    state
+        .db
+        .call(move |c| cargar_semana(c, id_estudiante, fecha))
+        .await?
+        .ok_or(AppError::NotFound)
+}
+
+fn url_semana(lunes: NaiveDate, grado: Option<i64>) -> String {
+    match grado {
+        Some(g) => format!("/?fecha={}&grado={g}", fechas::iso(lunes)),
+        None => format!("/?fecha={}", fechas::iso(lunes)),
+    }
+}
+
+pub fn url_pagos(id_estudiante: i64, fecha: NaiveDate, grado: Option<i64>) -> String {
+    let base = format!(
+        "/pagos/{id_estudiante}?fecha={}",
+        fechas::iso(fechas::lunes_de(fecha))
+    );
+    match grado {
+        Some(g) => format!("{base}&grado={g}"),
+        None => base,
+    }
+}
+
+pub fn url_comprobante(id_estudiante: i64, lunes: NaiveDate, grado: i64) -> String {
+    format!(
+        "/comprobante/{id_estudiante}?fecha={}&grado={grado}",
+        fechas::iso(lunes)
+    )
+}
+
+/// `/pagos/{id}`: register and review payments of one week.
+pub async fn gestion(
     State(state): State<AppState>,
     Path(id_estudiante): Path<i64>,
     Query(q): Query<SemanaQuery>,
 ) -> Result<Markup, AppError> {
-    let lunes = fechas::lunes_de(fechas::parse_o_hoy(q.semana.as_deref()));
-    let domingo = fechas::sumar_dias(lunes, 6);
-
-    let cuenta = state
-        .db
-        .call(move |c| {
-            let Some(estudiante) = estudiantes::repository::por_id(c, id_estudiante)? else {
-                return Ok::<_, rusqlite::Error>(None);
-            };
-            let deuda_anterior = consumos::repository::total_antes_de(c, id_estudiante, lunes)?
-                - repository::total_antes_de(c, id_estudiante, lunes)?;
-            Ok(Some(Cuenta {
-                estudiante,
-                deuda_anterior,
-                consumos: consumos::repository::de_estudiante_entre(
-                    c,
-                    id_estudiante,
-                    lunes,
-                    domingo,
-                )?,
-                pagos: repository::de_estudiante_entre(c, id_estudiante, lunes, domingo)?,
-            }))
-        })
-        .await?
-        .ok_or(AppError::NotFound)?;
-
-    Ok(vista_cuenta(&cuenta, lunes))
+    let semana = semana(&state, id_estudiante, q.fecha.as_deref()).await?;
+    let grado = grado_desde(q.grado.as_deref()).or(semana.estudiante.id_grado);
+    Ok(vista_gestion(
+        &semana,
+        grado,
+        mensaje_flash(q.ok.as_deref()),
+    ))
 }
 
 pub async fn registrar(
@@ -85,8 +145,7 @@ pub async fn registrar(
     Form(form): Form<PagoForm>,
 ) -> Result<Redirect, AppError> {
     let monto = forms::monto(&form.monto, "Monto")?;
-    let fecha = forms::fecha(&form.fecha, "Fecha")?;
-
+    let fecha = forms::fecha(&form.fecha_pago, "Fecha")?;
     let registrado = state
         .db
         .call(move |c| {
@@ -100,7 +159,11 @@ pub async fn registrar(
     if !registrado {
         return Err(AppError::NotFound);
     }
-    Ok(Redirect::to(&url_cuenta(id_estudiante, fecha)))
+    let grado = grado_desde(form.grado.as_deref());
+    Ok(Redirect::to(&format!(
+        "{}&ok=pago",
+        url_pagos(id_estudiante, fecha, grado)
+    )))
 }
 
 pub async fn eliminar(
@@ -116,148 +179,230 @@ pub async fn eliminar(
         return Err(AppError::NotFound);
     }
     let semana = fechas::parse_o_hoy(Some(&form.semana));
-    Ok(Redirect::to(&url_cuenta(id_estudiante, semana)))
+    let grado = grado_desde(form.grado.as_deref());
+    Ok(Redirect::to(&format!(
+        "{}&ok=pago-eliminado",
+        url_pagos(id_estudiante, semana, grado)
+    )))
 }
 
-pub fn url_cuenta(id_estudiante: i64, semana: NaiveDate) -> String {
-    format!(
-        "/pagos/{id_estudiante}?semana={}",
-        fechas::iso(fechas::lunes_de(semana))
+fn color_saldo(total: f64) -> &'static str {
+    if total > 0.005 {
+        "text-ios-red"
+    } else {
+        "text-ios-green"
+    }
+}
+
+fn vista_gestion(semana: &Semana, grado: Option<i64>, flash: Option<&str>) -> Markup {
+    let id = semana.estudiante.id;
+    let total = semana.total();
+    let pagado = semana.pagado();
+    let nombre = semana.estudiante.nombre_completo();
+    let navegar = |dias: i64| url_pagos(id, fechas::sumar_dias(semana.lunes, dias), grado);
+
+    layout::page(
+        &format!("Pagos - {nombre}"),
+        flash,
+        html! {
+            nav class="ios-nav" {
+                div class="mx-auto flex max-w-2xl items-center justify-between lg:max-w-6xl" {
+                    a href=(url_semana(semana.lunes, grado)) class="ios-link" {
+                        (icono(Icono::ChevronIzquierda, "-ml-2 h-6 w-6"))
+                        span class="text-[17px] font-medium" { "Atrás" }
+                    }
+                    h2 class="hidden truncate px-4 text-[17px] font-semibold sm:block" { "Gestión de Pagos" }
+                    div class="flex items-center gap-2" {
+                        span class="text-[13px] font-semibold tracking-wider text-ios-gray uppercase" { "Saldo:" }
+                        span class=(format!("text-[17px] font-bold tabular-nums {}", color_saldo(total))) { (soles(total)) }
+                    }
+                }
+            }
+            main class="mx-auto max-w-2xl px-4 pt-6 pb-20 lg:max-w-6xl lg:pt-10" {
+                header class="mb-8 lg:mb-12" {
+                    h1 class="text-[28px] leading-tight font-bold tracking-tight text-gray-900 sm:text-[34px]" { (nombre) }
+                    div class="mt-1 flex flex-wrap items-center gap-2" {
+                        a href=(navegar(-7)) class="rounded-lg p-1 text-gray-400 hover:bg-white hover:text-ios-blue" title="Semana anterior" { (icono(Icono::ChevronIzquierda, "h-5 w-5")) }
+                        p class="text-[17px] font-medium text-ios-gray" { (fechas::etiqueta_semana(semana.lunes)) }
+                        a href=(navegar(7)) class="rounded-lg p-1 text-gray-400 hover:bg-white hover:text-ios-blue" title="Semana siguiente" { (icono(Icono::ChevronDerecha, "h-5 w-5")) }
+                        a href=(url_comprobante(id, semana.lunes, grado.unwrap_or(0))) class="ml-auto inline-flex items-center gap-1 text-[15px] font-semibold text-ios-blue" {
+                            (icono(Icono::Recibo, "h-5 w-5")) "Comprobante"
+                        }
+                    }
+                }
+                div class="lg:grid lg:grid-cols-12 lg:items-start lg:gap-10" {
+                    aside class="mb-10 lg:sticky lg:top-24 lg:col-span-5 lg:mb-0" {
+                        h3 class="section-title font-medium" { "Registrar nuevo pago" }
+                        div class="ios-card" {
+                            form method="post" action=(format!("/pagos/{id}")) class="divide-y divide-gray-100" {
+                                @if let Some(g) = grado { input type="hidden" name="grado" value=(g); }
+                                div class="ios-row" {
+                                    label for="monto" class="ios-label text-gray-600" { "Monto" }
+                                    div class="flex flex-1 items-center" {
+                                        span class="mr-1 text-[19px] font-semibold text-gray-400" { "S/" }
+                                        input type="number" name="monto" id="monto" step="0.01" min="0.01" placeholder="0.00" required inputmode="decimal"
+                                            value=[(total > 0.005).then(|| monto(total))]
+                                            class="ios-input text-[20px] font-bold tabular-nums text-ios-blue";
+                                    }
+                                }
+                                div class="ios-row" {
+                                    label for="fecha_pago" class="ios-label text-gray-600" { "Fecha" }
+                                    input type="date" name="fecha_pago" id="fecha_pago" required value=(fechas::iso(semana.lunes))
+                                        class="ios-input font-semibold text-ios-blue";
+                                }
+                                div class="bg-gray-50/50 p-4" {
+                                    button type="submit" class="btn-ios" { "Registrar Abono" }
+                                }
+                            }
+                        }
+                        div class="mt-6 space-y-2 rounded-3xl border border-gray-200 bg-white p-5 text-[15px]" {
+                            div class="flex justify-between" { span class="text-gray-500" { "Consumo de la semana" } span class="font-semibold tabular-nums" { (soles(semana.subtotal())) } }
+                            div class="flex justify-between" { span class="text-gray-500" { "Deuda anterior" } span class="font-semibold tabular-nums" { (soles(semana.deuda_anterior)) } }
+                            div class="flex justify-between" { span class="text-gray-500" { "Pagos de la semana" } span class="font-semibold tabular-nums" { "- " (soles(pagado)) } }
+                            div class="flex items-center justify-between border-t border-gray-100 pt-2" {
+                                span class="font-medium text-gray-700" { "Saldo actual" }
+                                span class=(format!("text-[20px] font-black tabular-nums {}", color_saldo(total))) { (soles(total)) }
+                            }
+                        }
+                    }
+                    section class="lg:col-span-7" {
+                        div class="mb-3 flex items-end justify-between px-4" {
+                            h3 class="text-[13px] font-medium tracking-wide text-ios-gray uppercase" { "Histórico de pagos" }
+                            @if !semana.pagos.is_empty() {
+                                div class="text-right" {
+                                    span class="block text-[11px] font-bold text-gray-400 uppercase" { "Total abonado" }
+                                    span class="text-[17px] font-bold text-ios-green" { (soles(pagado)) }
+                                }
+                            }
+                        }
+                        div class="ios-card" {
+                            @if semana.pagos.is_empty() {
+                                (estado_vacio(Icono::Dinero, "Historial vacío", "Aún no se han registrado pagos para esta semana."))
+                            } @else {
+                                div class="divide-y divide-gray-100" {
+                                    @for pago in &semana.pagos {
+                                        div class="flex items-center justify-between p-5 transition-colors hover:bg-gray-50" {
+                                            div class="flex items-center gap-4" {
+                                                div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-ios-green-soft" {
+                                                    (icono(Icono::Check, "h-6 w-6 text-ios-green"))
+                                                }
+                                                div {
+                                                    p class="text-[19px] leading-tight font-bold text-gray-900 tabular-nums" { (soles(pago.monto)) }
+                                                    p class="mt-0.5 text-[14px] text-ios-gray" { (fechas::larga(pago.fecha)) }
+                                                }
+                                            }
+                                            form method="post" action=(format!("/pagos/{id}/{}/eliminar", pago.id)) data-confirm="¿Estás seguro de eliminar este pago?" {
+                                                input type="hidden" name="semana" value=(fechas::iso(semana.lunes));
+                                                @if let Some(g) = grado { input type="hidden" name="grado" value=(g); }
+                                                button type="submit" class="-mr-2 px-3 py-2 text-[15px] font-semibold text-ios-red transition-colors hover:text-red-700" { "Eliminar" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
     )
 }
 
-struct FilaProducto<'a> {
-    id_producto: i64,
-    nombre: &'a str,
-    cantidades: [i64; 7],
-    total: f64,
+/// `/comprobante/{id}`: weekly sales note that can be copied as an image.
+pub async fn comprobante(
+    State(state): State<AppState>,
+    Path(id_estudiante): Path<i64>,
+    Query(q): Query<SemanaQuery>,
+) -> Result<Markup, AppError> {
+    let semana = semana(&state, id_estudiante, q.fecha.as_deref()).await?;
+    let grado = grado_desde(q.grado.as_deref()).or(semana.estudiante.id_grado);
+    Ok(vista_comprobante(&semana, grado))
 }
 
-fn vista_cuenta(cuenta: &Cuenta, lunes: NaiveDate) -> Markup {
-    let mut filas: Vec<FilaProducto> = Vec::new();
-    let mut total_por_dia = [0.0_f64; 7];
-    for consumo in &cuenta.consumos {
-        let dia = fechas::indice_dia(consumo.fecha);
-        total_por_dia[dia] += consumo.total_linea;
-        let posicion = match filas
-            .iter()
-            .position(|f| f.id_producto == consumo.id_producto)
-        {
-            Some(posicion) => posicion,
-            None => {
-                filas.push(FilaProducto {
-                    id_producto: consumo.id_producto,
-                    nombre: &consumo.nombre_producto,
-                    cantidades: [0; 7],
-                    total: 0.0,
-                });
-                filas.len() - 1
-            }
-        };
-        filas[posicion].cantidades[dia] += consumo.cantidad;
-        filas[posicion].total += consumo.total_linea;
+fn vista_comprobante(semana: &Semana, grado: Option<i64>) -> Markup {
+    // Consumption arrives ordered by date: group consecutive lines per day.
+    let mut por_dia: Vec<Vec<&ConsumoDetalle>> = Vec::new();
+    for consumo in &semana.consumos {
+        match por_dia.last_mut() {
+            Some(dia) if dia[0].fecha == consumo.fecha => dia.push(consumo),
+            _ => por_dia.push(vec![consumo]),
+        }
     }
-
-    let consumo_semana: f64 = total_por_dia.iter().sum();
-    let pagos_semana: f64 = cuenta.pagos.iter().map(|p| p.monto).sum();
-    let saldo = cuenta.deuda_anterior + consumo_semana - pagos_semana;
-    // The kiosk works Monday–Saturday; show Sunday only when it has data.
-    let dias = if total_por_dia[6] != 0.0 { 7 } else { 6 };
-    let id = cuenta.estudiante.id;
+    let nombre = semana.estudiante.nombre_completo();
 
     layout::page(
-        &cuenta.estudiante.nombre_completo(),
-        "inicio",
+        &format!("Comprobante - {nombre}"),
+        None,
         html! {
-            a class="btn-link mb-2 inline-block" href=(format!("/?semana={}", fechas::iso(lunes))) { "← Volver al inicio" }
-            (page_header(&cuenta.estudiante.nombre_completo(), Some(&format!("{} · {}", cuenta.estudiante.grado(), fechas::etiqueta_semana(lunes)))))
-            div class="mb-4 flex gap-1" {
-                a class="btn-secondary" href=(url_cuenta(id, fechas::sumar_dias(lunes, -7))) { "← Semana anterior" }
-                a class="btn-secondary" href=(url_cuenta(id, fechas::sumar_dias(lunes, 7))) { "Semana siguiente →" }
-                a class="btn-link ml-2 self-center" href=(url_cuenta(id, fechas::hoy())) { "Esta semana" }
-            }
-            div class="mb-6 grid gap-3 sm:grid-cols-4" {
-                (stat("Deuda anterior", &soles(cuenta.deuda_anterior), false))
-                (stat("Consumo de la semana", &soles(consumo_semana), false))
-                (stat("Pagos de la semana", &soles(pagos_semana), false))
-                (stat(if saldo < -0.005 { "Saldo a favor" } else { "Saldo" }, &soles(saldo.abs()), saldo > 0.005))
-            }
-
-            section class="card mb-6 overflow-x-auto p-0" {
-                h2 class="px-4 pt-4 pb-2 font-semibold" { "Consumos" }
-                @if filas.is_empty() {
-                    p class="px-4 pb-4 text-sm text-slate-500" { "Sin consumos esta semana." }
-                } @else {
-                    table class="table-base" {
-                        thead {
-                            tr {
-                                th { "Producto" }
-                                @for d in 0..dias {
-                                    th class="num" { (fechas::DIAS_CORTOS[d]) " " (fechas::corta(fechas::sumar_dias(lunes, d as i64))) }
-                                }
-                                th class="num" { "Total" }
-                            }
+            script src="/public/js/vendor/html2canvas.min.js" defer {}
+            main class="mx-auto max-w-2xl p-2 sm:p-4" {
+                div class="mb-4 flex items-center justify-between gap-3" {
+                    a href=(url_semana(semana.lunes, grado)) class="rounded-lg border border-gray-200/50 bg-white/70 px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm backdrop-blur-md transition-all duration-150 hover:bg-white/90 active:scale-95" { "← Volver" }
+                    button type="button" data-copy-receipt data-file-name=(format!("nota-venta-{nombre}.png"))
+                        class="flex items-center gap-2 rounded-lg border border-blue-700/20 bg-gradient-to-b from-blue-500 to-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-all duration-150 hover:from-blue-600 hover:to-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60" {
+                        span { "📋 Copiar" }
+                    }
+                }
+                div id="comprobante" class="overflow-hidden rounded-lg border-2 border-gray-800 bg-white shadow-lg" {
+                    div class="border-b-2 border-gray-800 px-4 py-3 text-center" {
+                        h1 class="text-xl font-bold tracking-wide text-gray-900 uppercase" { "Kiosco Escolar" }
+                        p class="mt-0.5 text-xs font-semibold text-gray-600" { "Nota de Venta Semanal" }
+                    }
+                    div class="space-y-1 border-b-2 border-dashed border-gray-400 bg-gray-50 px-4 py-3 text-xs" {
+                        div class="flex justify-between gap-4" {
+                            span class="text-[10px] font-medium text-gray-600 uppercase" { "Cliente:" }
+                            span class="text-right font-bold text-gray-900" { (nombre) }
                         }
-                        tbody {
-                            @for fila in &filas {
-                                tr {
-                                    td { (fila.nombre) }
-                                    @for d in 0..dias {
-                                        td class="num" {
-                                            @if fila.cantidades[d] > 0 { (fila.cantidades[d]) } @else { span class="text-slate-300" { "—" } }
+                        div class="flex justify-between gap-4" {
+                            span class="text-[10px] font-medium text-gray-600 uppercase" { "Grado:" }
+                            span class="font-medium text-gray-800" { (semana.estudiante.grado()) }
+                        }
+                        div class="flex justify-between gap-4" {
+                            span class="text-[10px] font-medium text-gray-600 uppercase" { "Periodo:" }
+                            span class="font-medium text-gray-800" { (fechas::periodo(semana.lunes)) }
+                        }
+                    }
+                    div class="px-4 py-3" {
+                        @if por_dia.is_empty() {
+                            p class="py-4 text-center text-xs text-gray-500" { "No hay consumos en esta semana" }
+                        } @else {
+                            div class="grid grid-cols-2 gap-2" {
+                                @for dia in &por_dia {
+                                    div class="rounded border-2 border-gray-300" {
+                                        div class="flex items-center justify-between border-b-2 border-gray-300 bg-gray-100 px-2 py-1" {
+                                            span class="text-xs font-bold text-gray-900 uppercase" { (fechas::corta(dia[0].fecha)) }
+                                            span class="text-xs font-bold text-gray-900" { (soles(dia.iter().map(|c| c.total_linea).sum())) }
                                         }
-                                    }
-                                    td class="num" { (soles(fila.total)) }
-                                }
-                            }
-                        }
-                        tfoot class="font-semibold" {
-                            tr {
-                                td { "Total" }
-                                @for d in 0..dias { td class="num" { (soles_o_guion(total_por_dia[d])) } }
-                                td class="num" { (soles(consumo_semana)) }
-                            }
-                        }
-                    }
-                }
-            }
-
-            div class="grid gap-6 md:grid-cols-2" {
-                section class="card" {
-                    h2 class="mb-3 font-semibold" { "Registrar pago" }
-                    form method="post" action=(format!("/pagos/{id}")) class="flex flex-wrap items-end gap-3" {
-                        div {
-                            label class="label" for="monto" { "Monto (S/)" }
-                            input class="input w-28" id="monto" name="monto" required inputmode="decimal"
-                                value=[(saldo > 0.005).then(|| format!("{saldo:.2}"))];
-                        }
-                        div {
-                            label class="label" for="fecha" { "Fecha" }
-                            input class="input" type="date" id="fecha" name="fecha" required value=(fechas::iso(lunes));
-                        }
-                        button type="submit" class="btn-primary" { "Registrar" }
-                    }
-                }
-                section class="card" {
-                    h2 class="mb-3 font-semibold" { "Pagos de la semana" }
-                    @if cuenta.pagos.is_empty() {
-                        p class="text-sm text-slate-500" { "Sin pagos esta semana." }
-                    } @else {
-                        ul class="divide-y divide-slate-100 text-sm" {
-                            @for pago in &cuenta.pagos {
-                                li class="flex items-center justify-between py-2" {
-                                    span { (fechas::larga(pago.fecha)) }
-                                    span class="flex items-center gap-4" {
-                                        span class="font-medium tabular-nums" { (soles(pago.monto)) }
-                                        form method="post" action=(format!("/pagos/{id}/{}/eliminar", pago.id))
-                                            onsubmit="return confirm('¿Eliminar este pago?')" {
-                                            input type="hidden" name="semana" value=(fechas::iso(lunes));
-                                            button type="submit" class="btn-danger" { "Eliminar" }
+                                        div class="divide-y divide-gray-100" {
+                                            @for linea in dia {
+                                                div class="flex items-center justify-between px-2 py-1 text-xs" {
+                                                    div class="flex min-w-0 items-center gap-1" {
+                                                        span class="truncate text-gray-700" { (linea.nombre_producto) }
+                                                        span class="shrink-0 text-[10px] text-gray-400" { "× " (linea.cantidad) }
+                                                    }
+                                                    span class="ml-1 shrink-0 font-semibold text-gray-900" { (monto(linea.total_linea)) }
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
+                    }
+                    div class="px-4 pb-3" {
+                        div class="space-y-1.5 rounded border-2 border-gray-800 bg-white p-3 text-xs" {
+                            div class="flex justify-between py-0.5" { span class="font-medium text-gray-700 uppercase" { "Subtotal semana:" } span class="font-bold text-gray-900 tabular-nums" { (soles(semana.subtotal())) } }
+                            div class="flex justify-between py-0.5" { span class="font-medium text-gray-700 uppercase" { "Deuda anterior:" } span class="font-bold text-gray-900 tabular-nums" { (soles(semana.deuda_anterior)) } }
+                            div class="flex justify-between py-0.5" { span class="font-medium text-gray-700 uppercase" { "Pagos realizados:" } span class="font-bold text-gray-900 tabular-nums" { "- " (soles(semana.pagado())) } }
+                            div class="mt-2 flex items-center justify-between border-t-2 border-gray-800 pt-2" {
+                                span class="text-sm font-bold text-gray-900 uppercase" { "Total a pagar:" }
+                                span class="text-lg font-black text-gray-900 tabular-nums" { (soles(semana.total())) }
+                            }
+                        }
+                    }
+                    div class="border-t-2 border-gray-800 bg-gray-100 px-3 py-2" {
+                        p class="text-center text-[10px] font-medium tracking-wide text-gray-600 uppercase" { "Nota de venta - Semana del " (fechas::larga(semana.lunes)) }
+                        p class="mt-0.5 text-center text-[9px] text-gray-500" { "Gracias por su preferencia" }
                     }
                 }
             }

@@ -1,64 +1,46 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use chrono::NaiveDate;
 use tokio_rusqlite::rusqlite::{self, Connection};
 
 use super::repository;
-use crate::{
-    estudiantes::{self, Sector},
-    productos,
-};
+use crate::{estudiantes, productos};
 
-pub struct Celda {
-    pub id_estudiante: i64,
-    pub id_producto: i64,
-    pub cantidad: i64,
-}
-
-#[derive(Default)]
-pub struct ResultadoRegistro {
-    pub cambios: usize,
-    pub ignoradas: usize,
-}
-
-/// Saves the daily grid in a single transaction.
+/// Saves what one student consumed on one day, in a single transaction.
 ///
-/// Only cells whose quantity changed are written, so untouched cells keep the
-/// price they were sold at. Cells of inactive products or of students outside
-/// the sector are ignored and counted.
-pub fn guardar_registro(
+/// `cantidades` holds (product id, quantity). Only products whose quantity
+/// changed are written, so untouched products keep the price they were sold
+/// at. Inactive or unknown products are skipped. Returns `None` when the
+/// student does not exist or is inactive (nothing is written).
+pub fn guardar_dia(
     c: &mut Connection,
-    sector: Sector,
+    id_estudiante: i64,
     fecha: NaiveDate,
-    celdas: &[Celda],
-) -> rusqlite::Result<ResultadoRegistro> {
+    cantidades: &[(i64, i64)],
+) -> rusqlite::Result<Option<usize>> {
     let tx = c.transaction()?;
 
-    let estudiantes: HashSet<i64> = estudiantes::repository::activos_por_sector(&tx, sector)?
-        .into_iter()
-        .map(|e| e.id)
-        .collect();
+    match estudiantes::repository::por_id(&tx, id_estudiante)? {
+        Some(estudiante) if estudiante.esta_activo => {}
+        _ => return Ok(None),
+    }
     let precios: HashMap<i64, f64> = productos::repository::activos(&tx)?
         .into_iter()
         .map(|p| (p.id, p.precio_unitario))
         .collect();
 
-    let mut resultado = ResultadoRegistro::default();
-    for celda in celdas {
-        let precio = match precios.get(&celda.id_producto) {
-            Some(precio) if estudiantes.contains(&celda.id_estudiante) => *precio,
-            _ => {
-                resultado.ignoradas += 1;
-                continue;
-            }
+    let mut cambios = 0;
+    for &(id_producto, cantidad) in cantidades {
+        let Some(&precio) = precios.get(&id_producto) else {
+            continue;
         };
-        if actualizar_celda(&tx, celda, fecha, precio)? {
-            resultado.cambios += 1;
+        if actualizar_celda(&tx, id_estudiante, id_producto, fecha, cantidad, precio)? {
+            cambios += 1;
         }
     }
 
     tx.commit()?;
-    Ok(resultado)
+    Ok(Some(cambios))
 }
 
 /// `ActualizarConsumo`, now transactional. Returns whether the cell changed.
@@ -67,33 +49,28 @@ pub fn guardar_registro(
 /// row when the cell is edited.
 fn actualizar_celda(
     tx: &Connection,
-    celda: &Celda,
+    id_estudiante: i64,
+    id_producto: i64,
     fecha: NaiveDate,
+    cantidad: i64,
     precio: f64,
 ) -> rusqlite::Result<bool> {
-    let filas = repository::filas_de_celda(tx, celda.id_estudiante, celda.id_producto, fecha)?;
+    let filas = repository::filas_de_celda(tx, id_estudiante, id_producto, fecha)?;
     let actual: i64 = filas.iter().map(|f| f.cantidad).sum();
-    if actual == celda.cantidad {
+    if actual == cantidad {
         return Ok(false);
     }
 
     match filas.split_first() {
-        None => repository::registrar(
-            tx,
-            celda.id_estudiante,
-            celda.id_producto,
-            celda.cantidad,
-            precio,
-            fecha,
-        )?,
+        None => repository::registrar(tx, id_estudiante, id_producto, cantidad, precio, fecha)?,
         Some((primera, duplicadas)) => {
             for fila in duplicadas {
                 repository::eliminar(tx, fila.id)?;
             }
-            if celda.cantidad <= 0 {
+            if cantidad <= 0 {
                 repository::eliminar(tx, primera.id)?;
             } else {
-                repository::actualizar(tx, primera.id, celda.cantidad, precio)?;
+                repository::actualizar(tx, primera.id, cantidad, precio)?;
             }
         }
     }

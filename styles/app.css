@@ -3,54 +3,118 @@
  *   ./tailwindcss -i styles/app.css -o public/css/app.css --minify
  *   ./tailwindcss -i styles/app.css -o public/css/app.css --watch
  */
+
 /* source(none): scan only the paths below, never the whole project. */
 @import "tailwindcss" source(none);
 
-/* Maud templates live in Rust files. */
+/* Maud templates and hand-written JS. */
 @source "../src";
+@source "../public/js/app.js";
+
+/* iOS-inspired palette taken from the original Go design. */
+@theme {
+  --color-ios-bg: #f2f2f7;
+  --color-ios-blue: #007aff;
+  --color-ios-blue-dark: #0062cc;
+  --color-ios-gray: #8e8e93;
+  --color-ios-gray-light: #aeaeb2;
+  --color-ios-green: #34c759;
+  --color-ios-green-soft: #e8f9ee;
+  --color-ios-red: #ff3b30;
+}
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  input:focus,
+  select:focus {
+    outline: none;
+  }
+
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+}
 
 @layer components {
-  .card {
-    @apply rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200;
+  /* Sticky translucent top bar. */
+  .ios-nav {
+    @apply sticky top-0 z-30 border-b border-gray-200/70 bg-white/70 px-4 py-3 backdrop-blur-xl print:hidden;
   }
 
-  .label {
-    @apply mb-1 block text-sm font-medium text-slate-700;
+  .ios-link {
+    @apply flex items-center text-ios-blue transition-opacity active:opacity-50;
   }
 
-  .input {
-    @apply rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none;
+  .section-title {
+    @apply mb-3 px-4 text-[13px] font-bold tracking-wide text-ios-gray uppercase;
   }
 
-  .btn-primary {
-    @apply inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700;
+  .ios-card {
+    @apply overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm;
   }
 
-  .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-md bg-white px-3 py-1.5 text-sm font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50;
+  .ios-row {
+    @apply flex items-center gap-4 px-5 py-4;
   }
 
-  .btn-link {
-    @apply text-sm font-medium text-emerald-700 hover:underline;
+  .ios-label {
+    @apply w-24 shrink-0 text-[17px] font-medium text-gray-500;
   }
 
-  .btn-danger {
-    @apply text-sm font-medium text-red-700 hover:underline;
+  .ios-input {
+    @apply min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] font-medium text-gray-900 placeholder-gray-300;
   }
 
-  .table-base {
-    @apply w-full text-sm;
+  .btn-ios {
+    @apply flex w-full items-center justify-center gap-2 rounded-2xl bg-ios-blue py-4 text-lg font-bold text-white shadow-lg shadow-blue-200 transition-all hover:bg-ios-blue-dark active:scale-[0.98];
   }
 
-  .table-base th {
-    @apply bg-slate-100 px-3 py-2 text-left font-medium whitespace-nowrap text-slate-600;
+  .btn-ios-secondary {
+    @apply block w-full rounded-2xl bg-gray-100 py-4 text-center text-[17px] font-bold text-gray-900 transition-all hover:bg-gray-200 active:scale-[0.98];
   }
 
-  .table-base td {
-    @apply border-t border-slate-100 px-3 py-2;
+  .btn-text {
+    @apply rounded-lg px-3 py-1 text-[15px] font-medium transition-colors active:scale-95;
   }
 
-  .num {
-    @apply text-right tabular-nums whitespace-nowrap;
+  .pill {
+    @apply rounded-full border border-gray-200 bg-white px-4 py-2 text-[14px] font-semibold whitespace-nowrap text-gray-600 shadow-sm transition-all active:scale-95;
+  }
+
+  .pill-active {
+    @apply border-ios-blue bg-ios-blue text-white;
+  }
+
+  .badge {
+    @apply rounded-full px-2 py-0.5 text-[13px] font-semibold;
+  }
+
+  .avatar {
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-50 font-bold text-indigo-600 sm:h-12 sm:w-12 sm:text-lg;
+  }
+
+  .select-ios {
+    @apply w-full cursor-pointer appearance-none rounded-2xl border border-gray-300 bg-white bg-no-repeat px-4 py-3 pr-10 text-[17px] font-medium text-gray-900 transition-all focus:border-ios-blue focus:ring-2 focus:ring-blue-100;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%23666' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 0.75rem center;
+    background-size: 1.25em 1.25em;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 }

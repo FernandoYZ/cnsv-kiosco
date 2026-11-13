@@ -1,6 +1,6 @@
 use axum::{
     Form,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     response::Redirect,
 };
 use maud::{Markup, html};
@@ -12,15 +12,24 @@ use crate::{
     forms,
     state::AppState,
     templates::{
-        components::{badge_estado, boton_estado, page_header, soles},
+        components::{
+            Icono, bottom_nav, encabezado, estado_vacio, icono, ios_nav, mensaje_flash, monto,
+            soles,
+        },
         layout,
     },
 };
 
 #[derive(Deserialize)]
+pub struct ListaQuery {
+    editar: Option<i64>,
+    ok: Option<String>,
+}
+
+#[derive(Deserialize)]
 pub struct ProductoForm {
     nombre: String,
-    precio: String,
+    precio_unitario: String,
 }
 
 #[derive(Deserialize)]
@@ -31,13 +40,16 @@ pub struct EstadoForm {
 fn validar(form: &ProductoForm) -> Result<(String, f64), AppError> {
     Ok((
         forms::texto(&form.nombre, "Nombre", 100)?,
-        forms::monto(&form.precio, "Precio")?,
+        forms::monto(&form.precio_unitario, "Precio")?,
     ))
 }
 
-pub async fn listar(State(state): State<AppState>) -> Result<Markup, AppError> {
+pub async fn listar(
+    State(state): State<AppState>,
+    Query(q): Query<ListaQuery>,
+) -> Result<Markup, AppError> {
     let productos = state.db.call(|c| repository::todos(c)).await?;
-    Ok(vista_lista(&productos))
+    Ok(vista(&productos, q.editar, mensaje_flash(q.ok.as_deref())))
 }
 
 pub async fn crear(
@@ -49,19 +61,7 @@ pub async fn crear(
         .db
         .call(move |c| repository::insertar(c, &nombre, precio))
         .await?;
-    Ok(Redirect::to("/productos"))
-}
-
-pub async fn editar(
-    State(state): State<AppState>,
-    Path(id): Path<i64>,
-) -> Result<Markup, AppError> {
-    let producto = state
-        .db
-        .call(move |c| repository::por_id(c, id))
-        .await?
-        .ok_or(AppError::NotFound)?;
-    Ok(vista_editar(&producto))
+    Ok(Redirect::to("/productos?ok=producto-creado"))
 }
 
 pub async fn actualizar(
@@ -77,7 +77,7 @@ pub async fn actualizar(
     if filas == 0 {
         return Err(AppError::NotFound);
     }
-    Ok(Redirect::to("/productos"))
+    Ok(Redirect::to("/productos?ok=producto-actualizado"))
 }
 
 pub async fn cambiar_estado(
@@ -93,66 +93,120 @@ pub async fn cambiar_estado(
     if filas == 0 {
         return Err(AppError::NotFound);
     }
-    Ok(Redirect::to("/productos"))
+    Ok(Redirect::to("/productos?ok=producto-estado"))
 }
 
-fn campos(producto: Option<&Producto>) -> Markup {
+fn fila(p: &Producto) -> Markup {
     html! {
-        div {
-            label class="label" for="nombre" { "Nombre" }
-            input class="input w-64" id="nombre" name="nombre" required maxlength="100"
-                value=[producto.map(|p| p.nombre.as_str())];
-        }
-        div {
-            label class="label" for="precio" { "Precio (S/)" }
-            input class="input w-28" id="precio" name="precio" required inputmode="decimal"
-                value=[producto.map(|p| format!("{:.2}", p.precio_unitario))];
+        div class="flex items-center justify-between gap-2 p-4 transition-colors hover:bg-gray-50" {
+            div class="flex min-w-0 items-center gap-4" {
+                div class=(if p.esta_activo { "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600" } else { "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-400 opacity-50" }) {
+                    (icono(Icono::Productos, "h-5 w-5"))
+                }
+                div class="min-w-0" {
+                    p class=(if p.esta_activo { "truncate text-[17px] leading-tight font-semibold text-gray-900" } else { "truncate text-[17px] leading-tight font-semibold text-gray-400 line-through" }) {
+                        (p.nombre)
+                    }
+                    p class=(if p.esta_activo { "text-[15px] font-medium tabular-nums text-ios-blue" } else { "text-[15px] font-medium tabular-nums text-gray-400" }) {
+                        (soles(p.precio_unitario))
+                    }
+                }
+            }
+            div class="flex shrink-0 items-center gap-1" {
+                a href=(format!("/productos?editar={}#p{}", p.id, p.id)) class="btn-text text-ios-blue hover:bg-blue-50" { "Editar" }
+                form method="post" action=(format!("/productos/{}/estado", p.id))
+                    data-confirm=[p.esta_activo.then(|| format!("¿Deshabilitar {}?", p.nombre))] {
+                    input type="hidden" name="activo" value=(if p.esta_activo { "0" } else { "1" });
+                    @if p.esta_activo {
+                        button type="submit" class="btn-text text-ios-red hover:bg-red-50" { "Desactivar" }
+                    } @else {
+                        button type="submit" class="btn-text text-ios-green hover:bg-green-50" { "Activar" }
+                    }
+                }
+            }
         }
     }
 }
 
-fn vista_lista(productos: &[Producto]) -> Markup {
+fn fila_edicion(p: &Producto) -> Markup {
+    html! {
+        div class="border-l-4 border-ios-blue bg-[#f9f9f9] p-5" {
+            form method="post" action=(format!("/productos/{}", p.id)) class="space-y-4" {
+                div class="grid grid-cols-1 gap-4 sm:grid-cols-2" {
+                    label class="block rounded-xl border border-gray-200 bg-white p-3" {
+                        span class="mb-1 block text-[12px] font-bold text-gray-400 uppercase" { "Nombre del producto" }
+                        input type="text" name="nombre" value=(p.nombre) required maxlength="100" autofocus
+                            class="w-full border-none bg-transparent p-0 text-[17px] font-medium text-gray-900";
+                    }
+                    label class="block rounded-xl border border-gray-200 bg-white p-3" {
+                        span class="mb-1 block text-[12px] font-bold text-gray-400 uppercase" { "Precio (S/)" }
+                        input type="number" name="precio_unitario" value=(monto(p.precio_unitario)) step="0.01" min="0.01" required inputmode="decimal"
+                            class="w-full border-none bg-transparent p-0 text-[17px] font-bold text-ios-blue";
+                    }
+                }
+                p class="text-[13px] text-ios-gray" { "Cambiar el precio no altera las ventas ya registradas." }
+                div class="flex gap-3" {
+                    button type="submit" class="flex-1 rounded-xl bg-ios-blue py-3 font-bold text-white shadow-sm transition-all active:scale-[0.98]" { "Guardar Cambios" }
+                    a href="/productos" class="rounded-xl border border-gray-200 bg-white px-6 py-3 font-semibold text-gray-600 transition-all active:scale-[0.98]" { "Cancelar" }
+                }
+            }
+        }
+    }
+}
+
+fn vista(productos: &[Producto], editar: Option<i64>, flash: Option<&str>) -> Markup {
+    let activos = productos.iter().filter(|p| p.esta_activo).count();
     layout::page(
         "Productos",
-        "productos",
+        flash,
         html! {
-            (page_header("Productos", Some("El precio se congela en cada consumo: cambiarlo no altera ventas pasadas.")))
-            form method="post" action="/productos" class="card mb-6 flex flex-wrap items-end gap-4" {
-                (campos(None))
-                button type="submit" class="btn-primary" { "Agregar producto" }
-            }
-            div class="card overflow-x-auto p-0" {
-                table class="table-base" {
-                    thead { tr { th { "Producto" } th class="num" { "Precio" } th { "Estado" } th {} } }
-                    tbody {
-                        @for p in productos {
-                            tr class=(if p.esta_activo { "" } else { "text-slate-400" }) {
-                                td { (p.nombre) }
-                                td class="num" { (soles(p.precio_unitario)) }
-                                td { (badge_estado(p.esta_activo)) }
-                                td class="space-x-3 text-right whitespace-nowrap" {
-                                    a class="btn-link" href=(format!("/productos/{}/editar", p.id)) { "Editar" }
-                                    (boton_estado(&format!("/productos/{}/estado", p.id), p.esta_activo))
+            (bottom_nav())
+            (ios_nav(("/", "Atrás"), "Configuración de Productos", html! {}))
+            main class="mx-auto max-w-2xl px-4 pt-6 pb-32 sm:pb-10 lg:max-w-6xl" {
+                (encabezado("Productos", "Catálogo general del kiosco"))
+                div class="lg:grid lg:grid-cols-12 lg:items-start lg:gap-10" {
+                    aside class="mb-10 lg:sticky lg:top-24 lg:col-span-5 lg:mb-0" {
+                        h3 class="section-title font-medium" { "Nuevo producto" }
+                        div class="ios-card" {
+                            form method="post" action="/productos" class="divide-y divide-gray-100" {
+                                div class="ios-row" {
+                                    label for="new-name" class="ios-label" { "Nombre" }
+                                    input id="new-name" type="text" name="nombre" placeholder="Ej. Gelatina" required maxlength="100" class="ios-input";
+                                }
+                                div class="ios-row" {
+                                    label for="new-price" class="ios-label" { "Precio" }
+                                    div class="flex flex-1 items-center" {
+                                        span class="mr-1 text-[17px] text-gray-400" { "S/" }
+                                        input id="new-price" type="number" name="precio_unitario" step="0.01" min="0.01" placeholder="0.00" required inputmode="decimal"
+                                            class="ios-input font-bold text-ios-blue";
+                                    }
+                                }
+                                div class="bg-gray-50/50 p-4" {
+                                    button type="submit" class="btn-ios" { "Agregar al Catálogo" }
+                                }
+                            }
+                        }
+                    }
+                    section class="lg:col-span-7" {
+                        div class="mb-3 flex items-center justify-between px-4" {
+                            h3 class="text-[13px] font-medium tracking-wide text-ios-gray uppercase" { "Productos registrados" }
+                            span class="badge bg-indigo-50 text-indigo-600" { (activos) " activos de " (productos.len()) }
+                        }
+                        div class="ios-card" {
+                            @if productos.is_empty() {
+                                (estado_vacio(Icono::Productos, "Sin productos", "Comienza agregando productos en el panel lateral."))
+                            } @else {
+                                div class="divide-y divide-gray-200/70" {
+                                    @for p in productos {
+                                        div id=(format!("p{}", p.id)) class="scroll-mt-24" {
+                                            @if editar == Some(p.id) { (fila_edicion(p)) } @else { (fila(p)) }
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-        },
-    )
-}
-
-fn vista_editar(producto: &Producto) -> Markup {
-    layout::page(
-        "Editar producto",
-        "productos",
-        html! {
-            (page_header("Editar producto", Some(&producto.nombre)))
-            form method="post" action=(format!("/productos/{}", producto.id)) class="card flex flex-wrap items-end gap-4" {
-                (campos(Some(producto)))
-                button type="submit" class="btn-primary" { "Guardar" }
-                a href="/productos" class="btn-secondary" { "Cancelar" }
             }
         },
     )

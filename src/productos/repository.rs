@@ -1,4 +1,4 @@
-use tokio_rusqlite::rusqlite::{self, Connection, OptionalExtension, Row, params};
+use tokio_rusqlite::rusqlite::{self, Connection, Row, params};
 
 use super::Producto;
 
@@ -32,17 +32,6 @@ pub fn activos(c: &Connection) -> rusqlite::Result<Vec<Producto>> {
     )?;
 
     stmt.query_map([], mapear)?.collect()
-}
-
-/// ObtenerProductoPorId.
-pub fn por_id(c: &Connection, id: i64) -> rusqlite::Result<Option<Producto>> {
-    c.query_row(
-        "SELECT id_producto, nombre, precio_unitario, esta_activo
-         FROM productos WHERE id_producto = ?1",
-        [id],
-        mapear,
-    )
-    .optional()
 }
 
 /// InsertarProducto: creates an active product.

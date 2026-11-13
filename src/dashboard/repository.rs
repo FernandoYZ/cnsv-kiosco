@@ -1,13 +1,20 @@
-//! Grouped queries for the main view. Each one returns a value per student in
-//! a single query to avoid N+1 round trips.
+//! Grouped queries for the main weekly view. Each one covers every active
+//! student of a grade in a single query to avoid N+1 round trips.
 
 use std::collections::HashMap;
 
 use chrono::NaiveDate;
 use tokio_rusqlite::rusqlite::{self, Connection, params};
 
-/// ObtenerDeudasAnterioresBatch: consumption minus payments before `fecha`
-/// for every active student (`id_grado = 0` → all grades).
+pub struct LineaSemana {
+    pub id_estudiante: i64,
+    pub fecha: NaiveDate,
+    pub nombre_producto: String,
+    pub cantidad: i64,
+    pub total_linea: f64,
+}
+
+/// ObtenerDeudasAnterioresBatch: consumption minus payments before `fecha`.
 pub fn deudas_anteriores(
     c: &Connection,
     id_grado: i64,
@@ -22,15 +29,14 @@ pub fn deudas_anteriores(
            ), 0) AS deuda_anterior
          FROM estudiantes e
          LEFT JOIN consumos c ON e.id_estudiante = c.id_estudiante AND c.fecha_consumo < ?1
-         WHERE e.esta_activo = 1 AND (?2 = 0 OR e.id_grado = ?2)
+         WHERE e.esta_activo = 1 AND e.id_grado = ?2
          GROUP BY e.id_estudiante",
     )?;
-
     stmt.query_map(params![fecha, id_grado], |r| Ok((r.get(0)?, r.get(1)?)))?
         .collect()
 }
 
-/// ObtenerPagosSemanaBatch: payments between two dates (inclusive) per active student.
+/// ObtenerPagosSemanaBatch: payments between two dates (inclusive) per student.
 pub fn pagos_entre(
     c: &Connection,
     id_grado: i64,
@@ -43,31 +49,40 @@ pub fn pagos_entre(
          FROM estudiantes e
          LEFT JOIN pagos p ON e.id_estudiante = p.id_estudiante
                           AND p.fecha_pago BETWEEN ?1 AND ?2
-         WHERE e.esta_activo = 1 AND (?3 = 0 OR e.id_grado = ?3)
+         WHERE e.esta_activo = 1 AND e.id_grado = ?3
          GROUP BY e.id_estudiante",
     )?;
-
     stmt.query_map(params![inicio, fin, id_grado], |r| {
         Ok((r.get(0)?, r.get(1)?))
     })?
     .collect()
 }
 
-/// ObtenerConsumosSemana, aggregated in SQL: amount per (student, day).
-pub fn consumo_por_dia(
+/// ObtenerConsumosSemana restricted to one grade, with product names, so the
+/// table can show what each student took every day.
+pub fn lineas_semana(
     c: &Connection,
+    id_grado: i64,
     inicio: NaiveDate,
     fin: NaiveDate,
-) -> rusqlite::Result<HashMap<(i64, NaiveDate), f64>> {
+) -> rusqlite::Result<Vec<LineaSemana>> {
     let mut stmt = c.prepare_cached(
-        "SELECT id_estudiante, fecha_consumo, SUM(total_linea)
-         FROM consumos
-         WHERE fecha_consumo BETWEEN ?1 AND ?2
-         GROUP BY id_estudiante, fecha_consumo",
+        "SELECT c.id_estudiante, c.fecha_consumo, p.nombre, c.cantidad, c.total_linea
+         FROM consumos c
+         JOIN estudiantes e ON e.id_estudiante = c.id_estudiante
+         JOIN productos p   ON p.id_producto = c.id_producto
+         WHERE c.fecha_consumo BETWEEN ?1 AND ?2
+           AND e.esta_activo = 1 AND e.id_grado = ?3
+         ORDER BY c.id_estudiante, c.fecha_consumo, p.nombre",
     )?;
-
-    stmt.query_map(params![inicio, fin], |r| {
-        Ok(((r.get(0)?, r.get(1)?), r.get(2)?))
+    stmt.query_map(params![inicio, fin, id_grado], |r| {
+        Ok(LineaSemana {
+            id_estudiante: r.get(0)?,
+            fecha: r.get(1)?,
+            nombre_producto: r.get(2)?,
+            cantidad: r.get(3)?,
+            total_linea: r.get(4)?,
+        })
     })?
     .collect()
 }

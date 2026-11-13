@@ -20,20 +20,33 @@ struct PublicAssets;
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/", get(dashboard::handler::index))
+        // Consumption
+        .route("/registro", get(consumos::handler::inicio))
+        .route("/registro/{sector}", get(consumos::handler::sector))
+        .route("/resumen/{sector}", get(consumos::handler::resumen))
         .route(
-            "/registro",
-            get(consumos::handler::registro).post(consumos::handler::guardar_registro),
+            "/consumos/{id_estudiante}",
+            get(consumos::handler::editor).post(consumos::handler::guardar),
         )
-        .route("/resumen", get(consumos::handler::resumen))
+        // Payments
+        .route(
+            "/pagos/{id_estudiante}",
+            get(pagos::handler::gestion).post(pagos::handler::registrar),
+        )
+        .route(
+            "/pagos/{id_estudiante}/{id_pago}/eliminar",
+            post(pagos::handler::eliminar),
+        )
+        .route(
+            "/comprobante/{id_estudiante}",
+            get(pagos::handler::comprobante),
+        )
+        // Configuration
         .route(
             "/estudiantes",
             get(estudiantes::handler::listar).post(estudiantes::handler::crear),
         )
         .route("/estudiantes/{id}", post(estudiantes::handler::actualizar))
-        .route(
-            "/estudiantes/{id}/editar",
-            get(estudiantes::handler::editar),
-        )
         .route(
             "/estudiantes/{id}/estado",
             post(estudiantes::handler::cambiar_estado),
@@ -43,19 +56,11 @@ pub fn router(state: AppState) -> Router {
             get(productos::handler::listar).post(productos::handler::crear),
         )
         .route("/productos/{id}", post(productos::handler::actualizar))
-        .route("/productos/{id}/editar", get(productos::handler::editar))
         .route(
             "/productos/{id}/estado",
             post(productos::handler::cambiar_estado),
         )
-        .route(
-            "/pagos/{id_estudiante}",
-            get(pagos::handler::cuenta).post(pagos::handler::registrar),
-        )
-        .route(
-            "/pagos/{id_estudiante}/{id_pago}/eliminar",
-            post(pagos::handler::eliminar),
-        )
+        // Infrastructure
         .route("/health", get(health))
         .route("/public/{*path}", get(public_asset))
         .fallback(|| async { AppError::NotFound })
