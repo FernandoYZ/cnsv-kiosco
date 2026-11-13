@@ -17,7 +17,7 @@ pub fn page(title: &str, flash: Option<&str>, content: Markup) -> Markup {
                 meta name="apple-mobile-web-app-status-bar-style" content="default";
                 meta name="apple-mobile-web-app-title" content="Kiosco";
                 title { (title) " · Kiosco del Valle" }
-                link rel="icon" href=(assets::url("images/favicon.webp")) type="image/webp";
+                link rel="icon" href=(assets::url("images/icon-192.png")) type="image/png";
                 link rel="apple-touch-icon" href=(assets::url("images/apple-touch-icon.png"));
                 link rel="manifest" href=(assets::url("manifest.json"));
                 // Same URL as the CSS `url(...)`, so the preload is reused.
