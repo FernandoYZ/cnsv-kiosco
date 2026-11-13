@@ -3,7 +3,8 @@
  *   ./tailwindcss -i styles/app.css -o public/css/app.css --minify
  *   ./tailwindcss -i styles/app.css -o public/css/app.css --watch
  */
-@import "tailwindcss";
+/* source(none): scan only the paths below, never the whole project. */
+@import "tailwindcss" source(none);
 
 /* Maud templates live in Rust files. */
 @source "../src";
