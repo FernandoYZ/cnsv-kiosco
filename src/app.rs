@@ -618,4 +618,411 @@ mod tests {
                 .any(|c| c.starts_with("kiosco_session=;") && c.contains("Max-Age=0"))
         );
     }
+
+    // ---- Regression tests from the independent auth verification ----
+
+    const RUTAS_GET_SESION: [&str; 5] = [
+        "/registro",
+        "/registro/menor",
+        "/resumen/menor",
+        "/consumos/1",
+        "/productos",
+    ];
+    const RUTAS_GET_EDICION: [&str; 6] = [
+        "/",
+        "/pagos/1",
+        "/comprobante/1",
+        "/cobranza",
+        "/cierre",
+        "/estudiantes",
+    ];
+    const RUTAS_POST_EDICION: [&str; 8] = [
+        "/pagos/1",
+        "/pagos/1/1/eliminar",
+        "/estudiantes",
+        "/estudiantes/1",
+        "/estudiantes/1/estado",
+        "/productos",
+        "/productos/1",
+        "/productos/1/estado",
+    ];
+    const CUERPO: &str = "fecha=2026-10-27&cantidad_1=1&nombre=X&apellido=Y&precio=1.00&monto=1.00&fecha_pago=2026-10-27&grado=3&id_grado=3&token=t";
+
+    async fn cambios(estado: &AppState) -> i64 {
+        valor::<i64>(estado, "SELECT total_changes()").await
+    }
+
+    fn redirige_a(respuesta: &Response) -> Option<&str> {
+        respuesta
+            .headers()
+            .get(header::LOCATION)
+            .map(|v| v.to_str().unwrap())
+    }
+
+    #[tokio::test]
+    async fn matriz_de_permisos_get_y_post() {
+        let estado = estado().await;
+        let editor_c = cookies(&estado, true);
+        let kiosco = cookies(&estado, false);
+        let app = router(estado.clone());
+
+        for ruta in RUTAS_GET_SESION.iter().chain(RUTAS_GET_EDICION.iter()) {
+            let r = enviar(&app, get(&editor_c, ruta)).await;
+            assert_eq!(r.status(), StatusCode::OK, "editor GET {ruta}");
+            let r = enviar(&app, get(&anonimo(), ruta)).await;
+            assert_eq!(redirige_a(&r), Some("/login"), "anon GET {ruta}");
+        }
+        for ruta in RUTAS_GET_EDICION {
+            let r = enviar(&app, get(&kiosco, ruta)).await;
+            assert_eq!(redirige_a(&r), Some("/registro"), "kiosco GET {ruta}");
+        }
+
+        let antes = cambios(&estado).await;
+        for ruta in RUTAS_POST_EDICION {
+            let r = enviar(&app, post(&kiosco, ruta, CUERPO.to_owned())).await;
+            assert_eq!(r.status(), StatusCode::SEE_OTHER, "kiosco POST {ruta}");
+            assert_eq!(redirige_a(&r), Some("/registro"), "kiosco POST {ruta}");
+        }
+        for ruta in RUTAS_POST_EDICION.iter().chain(["/consumos/1"].iter()) {
+            let r = enviar(&app, post(&anonimo(), ruta, CUERPO.to_owned())).await;
+            assert_eq!(redirige_a(&r), Some("/login"), "anon POST {ruta}");
+        }
+        assert_eq!(
+            cambios(&estado).await,
+            antes,
+            "rejected POSTs write nothing"
+        );
+
+        // Editor POSTs reach the handlers (never bounced by auth).
+        for ruta in RUTAS_POST_EDICION.iter().chain(["/consumos/1"].iter()) {
+            let r = enviar(&app, post(&editor_c, ruta, CUERPO.to_owned())).await;
+            assert_ne!(r.status(), StatusCode::FORBIDDEN, "editor POST {ruta}");
+            let destino = redirige_a(&r).unwrap_or("");
+            assert!(
+                destino != "/login" && destino != "/registro" || ruta == &"/consumos/1",
+                "editor POST {ruta} -> {destino}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn csrf_en_cada_post_protegido_no_escribe() {
+        let estado = estado().await;
+        let s = editor(&estado);
+        let solo_sesion = s.split("; ").next().unwrap().to_owned();
+        let app = router(estado.clone());
+        let antes = cambios(&estado).await;
+
+        for ruta in RUTAS_POST_EDICION.iter().chain(["/consumos/1"].iter()) {
+            let casos: Vec<(&str, String, Option<&str>, String)> = vec![
+                ("sin token", s.clone(), None, CUERPO.to_owned()),
+                (
+                    "cabecera errada",
+                    s.clone(),
+                    Some("otro"),
+                    CUERPO.to_owned(),
+                ),
+                ("cabecera vacia", s.clone(), Some(""), CUERPO.to_owned()),
+                (
+                    "solo cookie, campo vacio",
+                    s.clone(),
+                    None,
+                    format!("csrf_token=&{CUERPO}"),
+                ),
+                (
+                    "campo errado",
+                    s.clone(),
+                    None,
+                    format!("csrf_token=otro&{CUERPO}"),
+                ),
+                (
+                    "sin cookie csrf",
+                    solo_sesion.clone(),
+                    Some(CSRF),
+                    CUERPO.to_owned(),
+                ),
+                (
+                    "cookie csrf vacia",
+                    format!("{solo_sesion}; {}=", csrf::COOKIE),
+                    Some(""),
+                    format!("csrf_token=&{CUERPO}"),
+                ),
+                (
+                    "cabecera errada gana al campo correcto",
+                    s.clone(),
+                    Some("otro"),
+                    format!("csrf_token={CSRF}&{CUERPO}"),
+                ),
+            ];
+            for (caso, cookie, cabecera_csrf, cuerpo) in casos {
+                let mut b = Request::post(*ruta)
+                    .header(header::COOKIE, cookie)
+                    .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded");
+                if let Some(t) = cabecera_csrf {
+                    b = b.header(csrf::CABECERA, t);
+                }
+                let r = enviar(&app, b.body(Body::from(cuerpo)).unwrap()).await;
+                assert_eq!(r.status(), StatusCode::FORBIDDEN, "{ruta}: {caso}");
+            }
+        }
+        assert_eq!(
+            cambios(&estado).await,
+            antes,
+            "no writes after CSRF rejections"
+        );
+
+        // The token as a form field is accepted (fallback submit of app.js).
+        let campo = Request::post("/consumos/1")
+            .header(header::COOKIE, &s)
+            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(Body::from(format!(
+                "fecha=2026-10-27&cantidad_1=1&csrf_token={CSRF}"
+            )))
+            .unwrap();
+        assert_eq!(enviar(&app, campo).await.status(), StatusCode::SEE_OTHER);
+
+        // Oversized body without header → 400, nothing written.
+        let antes = cambios(&estado).await;
+        let grande = Request::post("/consumos/1")
+            .header(header::COOKIE, &s)
+            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(Body::from(format!(
+                "csrf_token={CSRF}&x={}",
+                "a".repeat(70_000)
+            )))
+            .unwrap();
+        assert_eq!(enviar(&app, grande).await.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(cambios(&estado).await, antes);
+    }
+
+    #[tokio::test]
+    async fn login_csrf_errado_y_sin_cookie() {
+        let app = router(estado().await);
+        let errado = Request::post("/login")
+            .header(header::COOKIE, anonimo())
+            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(Body::from(format!(
+                "csrf_token=otro&usuario=jenny&password={CLAVE}"
+            )))
+            .unwrap();
+        let r = enviar(&app, errado).await;
+        assert_eq!(redirige_a(&r), Some("/login?error=csrf"));
+        assert!(
+            !set_cookies(&r)
+                .iter()
+                .any(|c| c.starts_with("kiosco_session="))
+        );
+
+        // First visit without any CSRF cookie: rejected, and a cookie is issued.
+        let sin_cookie = Request::post("/login")
+            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .header(csrf::CABECERA, CSRF)
+            .body(Body::from(format!("usuario=jenny&password={CLAVE}")))
+            .unwrap();
+        let r = enviar(&app, sin_cookie).await;
+        assert_eq!(redirige_a(&r), Some("/login?error=csrf"));
+        assert!(
+            set_cookies(&r)
+                .iter()
+                .any(|c| c.starts_with("kiosco_csrf="))
+        );
+    }
+
+    #[tokio::test]
+    async fn tokens_de_sesion_alterados_vencidos_o_de_otra_llave() {
+        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+        let estado = estado().await;
+        let app = router(estado.clone());
+        let ahora = chrono::Utc::now().timestamp();
+        let kiosco = Sesion {
+            id_usuario: 2,
+            puede_editar: false,
+        };
+
+        let valido = estado.auth.llave.firmar(kiosco, ahora);
+        let (datos, firma) = valido.split_once('.').unwrap();
+        let datos = String::from_utf8(URL_SAFE_NO_PAD.decode(datos).unwrap()).unwrap();
+        let ascendido = format!(
+            "{}.{firma}",
+            URL_SAFE_NO_PAD.encode(datos.replacen(":0:", ":1:", 1))
+        );
+        let vencido = estado
+            .auth
+            .llave
+            .firmar(kiosco, ahora - sesion::DURACION_SEGUNDOS - 1);
+        let otra_llave = crate::auth::sesion::Llave::aleatoria().firmar(kiosco, ahora);
+
+        for (caso, token) in [
+            ("alterado", ascendido),
+            ("vencido", vencido),
+            ("otra llave", otra_llave),
+            ("sin firma", valido.split('.').next().unwrap().to_owned()),
+        ] {
+            let c = format!("{}={token}; {}", sesion::COOKIE, anonimo());
+            for ruta in ["/", "/registro"] {
+                let r = enviar(&app, get(&c, ruta)).await;
+                assert_eq!(redirige_a(&r), Some("/login"), "{caso} {ruta}");
+                assert!(
+                    set_cookies(&r)
+                        .iter()
+                        .any(|c| c.starts_with("kiosco_session=;") && c.contains("Max-Age=0")),
+                    "{caso} clears the cookie"
+                );
+            }
+            // An invalid session does not count as logged in on /login.
+            let r = enviar(&app, get(&c, "/login")).await;
+            assert_eq!(r.status(), StatusCode::OK, "{caso}");
+        }
+
+        // Non-editor login lands on / and is sent to /registro.
+        let r = enviar(&app, login("kiosco", CLAVE)).await;
+        assert_eq!(redirige_a(&r), Some("/"));
+        let sesion_c = set_cookies(&r)
+            .into_iter()
+            .find(|c| c.starts_with("kiosco_session="))
+            .unwrap();
+        let valor_c = sesion_c.split(';').next().unwrap().to_owned();
+        let r = enviar(&app, get(&format!("{valor_c}; {}", anonimo()), "/")).await;
+        assert_eq!(redirige_a(&r), Some("/registro"));
+    }
+
+    fn login_desde(xff: &str, clave: &str) -> Request<Body> {
+        let mut r = login("jenny", clave);
+        r.headers_mut()
+            .insert("x-forwarded-for", xff.parse().unwrap());
+        r
+    }
+
+    #[tokio::test]
+    async fn limite_por_ip_xff_y_reinicio() {
+        let app = router(estado().await);
+        // Rotating the forged FIRST value does not escape the limit.
+        for i in 0..5 {
+            let r = enviar(
+                &app,
+                login_desde(&format!("203.0.113.{i}, 10.0.0.9"), "mal"),
+            )
+            .await;
+            assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+        }
+        let r = enviar(&app, login_desde("198.51.100.1, 10.0.0.9", CLAVE)).await;
+        assert_eq!(r.status(), StatusCode::TOO_MANY_REQUESTS);
+        // Another client IP is not affected.
+        let r = enviar(&app, login_desde("10.0.0.10", CLAVE)).await;
+        assert_eq!(r.status(), StatusCode::SEE_OTHER);
+
+        // Success resets: 4 failures, success, 4 failures → 5th attempt still allowed.
+        for _ in 0..4 {
+            enviar(&app, login_desde("10.0.0.11", "mal")).await;
+        }
+        assert_eq!(
+            enviar(&app, login_desde("10.0.0.11", CLAVE)).await.status(),
+            StatusCode::SEE_OTHER
+        );
+        for _ in 0..4 {
+            enviar(&app, login_desde("10.0.0.11", "mal")).await;
+        }
+        assert_eq!(
+            enviar(&app, login_desde("10.0.0.11", CLAVE)).await.status(),
+            StatusCode::SEE_OTHER
+        );
+
+        // Without a proxy, the peer address is used.
+        for _ in 0..5 {
+            let mut r = login("jenny", "mal");
+            r.extensions_mut().insert(axum::extract::ConnectInfo(
+                "192.0.2.1:5000".parse::<std::net::SocketAddr>().unwrap(),
+            ));
+            enviar(&app, r).await;
+        }
+        let mut r = login("jenny", CLAVE);
+        r.extensions_mut().insert(axum::extract::ConnectInfo(
+            "192.0.2.1:6000".parse::<std::net::SocketAddr>().unwrap(),
+        ));
+        assert_eq!(
+            enviar(&app, r).await.status(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+    }
+
+    #[tokio::test]
+    async fn publicos_estaticos_404_y_logout() {
+        let estado = estado().await;
+        let s = editor(&estado);
+        let app = router(estado.clone());
+        let js = enviar(&app, get("", "/public/js/app.js")).await;
+        assert_eq!(js.status(), StatusCode::OK);
+        assert!(set_cookies(&js).is_empty(), "no Set-Cookie on assets");
+        let cc = js
+            .headers()
+            .get(header::CACHE_CONTROL)
+            .map(|v| v.to_str().unwrap().to_owned())
+            .unwrap_or_default();
+        assert!(!cc.contains("no-store"), "{cc}");
+
+        assert_eq!(
+            enviar(&app, get("", "/health")).await.status(),
+            StatusCode::OK
+        );
+        for c in ["", s.as_str()] {
+            assert_eq!(
+                enviar(&app, get(c, "/no-existe")).await.status(),
+                StatusCode::NOT_FOUND
+            );
+        }
+        let salir = enviar(&app, get(&s, "/logout")).await;
+        assert_eq!(redirige_a(&salir), Some("/login"));
+        let borrada = set_cookies(&salir)
+            .into_iter()
+            .find(|c| c.starts_with("kiosco_session="))
+            .unwrap();
+        assert!(
+            borrada.contains("Max-Age=0") && borrada.contains("HttpOnly"),
+            "{borrada}"
+        );
+
+        for ruta in ["/", "/registro"] {
+            let html = texto(enviar(&app, get(&s, ruta)).await).await;
+            assert!(html.contains(r#"href="/logout""#), "logout link on {ruta}");
+        }
+    }
+
+    #[tokio::test]
+    async fn cookie_secure_configurable() {
+        let mut estado = estado().await;
+        estado.auth = crate::auth::Auth::new(true);
+        let app = router(estado);
+        let r = enviar(&app, login("jenny", CLAVE)).await;
+        let c = set_cookies(&r);
+        assert!(
+            c.iter()
+                .any(|c| c.starts_with("kiosco_session=") && c.contains("; Secure")),
+            "{c:?}"
+        );
+        let pagina = enviar(&app, get("", "/login")).await;
+        assert!(
+            set_cookies(&pagina)
+                .iter()
+                .any(|c| c.starts_with("kiosco_csrf=") && c.contains("Secure"))
+        );
+    }
+
+    #[tokio::test]
+    async fn login_con_caracteres_especiales_codificados() {
+        let estado = estado().await;
+        let clave = r#"ab%cd@"e=f&g"#;
+        let hash = crate::auth::password::generar(clave, &[9; 16]);
+        estado
+            .db
+            .call(move |c| {
+                c.execute("INSERT INTO usuarios VALUES (3, 'especial', ?1, 0)", [hash])?;
+                Ok::<_, tokio_rusqlite::rusqlite::Error>(())
+            })
+            .await
+            .unwrap();
+        let app = router(estado);
+        let codificada = "ab%25cd%40%22e%3Df%26g";
+        let r = enviar(&app, login("especial", codificada)).await;
+        assert_eq!(redirige_a(&r), Some("/"));
+    }
 }
