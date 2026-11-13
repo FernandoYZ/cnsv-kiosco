@@ -86,3 +86,42 @@ pub fn lineas_semana(
     })?
     .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::NaiveDate;
+
+    use super::{deudas_anteriores, pagos_entre};
+    use crate::test_support::conexion;
+
+    fn fecha(texto: &str) -> NaiveDate {
+        NaiveDate::parse_from_str(texto, "%Y-%m-%d").unwrap()
+    }
+
+    #[test]
+    fn la_deuda_anterior_resta_los_pagos_previos_a_la_semana() {
+        let c = conexion();
+        c.execute_batch(
+            "INSERT INTO consumos (id_estudiante, id_producto, cantidad, precio_unitario_venta, fecha_consumo) VALUES
+               (1, 1, 2, 1.5, '2026-10-20'),
+               (1, 2, 1, 5.0, '2026-10-27');
+             INSERT INTO pagos (id_estudiante, monto, fecha_pago) VALUES
+               (1, 1.0, '2026-10-19'),
+               (1, 2.0, '2026-10-26'),
+               (2, 4.0, '2026-10-19');",
+        )
+        .unwrap();
+
+        // Ana: 3.00 consumed and 1.00 paid before the week; the rest is this week.
+        let grado3 = deudas_anteriores(&c, 3, fecha("2026-10-26")).unwrap();
+        assert_eq!(grado3.get(&1), Some(&2.0));
+        assert!(!grado3.contains_key(&3), "inactive students are excluded");
+
+        // Luis paid without consuming: negative debt (credit).
+        let grado7 = deudas_anteriores(&c, 7, fecha("2026-10-26")).unwrap();
+        assert_eq!(grado7.get(&2), Some(&-4.0));
+
+        let pagos = pagos_entre(&c, 3, fecha("2026-10-26"), fecha("2026-11-01")).unwrap();
+        assert_eq!(pagos.get(&1), Some(&2.0));
+    }
+}

@@ -12,6 +12,8 @@ mod pagos;
 mod productos;
 mod state;
 mod templates;
+#[cfg(test)]
+mod test_support;
 
 use std::process::ExitCode;
 

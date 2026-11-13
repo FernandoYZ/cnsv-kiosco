@@ -21,3 +21,6 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 lto = "thin"
 strip = true
 codegen-units = 1
+
+[dev-dependencies]
+tower = { version = "0.5.3", features = ["util"] }

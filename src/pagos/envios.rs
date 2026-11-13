@@ -54,3 +54,31 @@ impl EnviosRecientes {
             .remove(token);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::EnviosRecientes;
+
+    #[test]
+    fn un_token_solo_se_puede_consumir_una_vez() {
+        let envios = EnviosRecientes::default();
+        let token = envios.nuevo_token();
+        assert!(envios.consumir(&token));
+        assert!(!envios.consumir(&token));
+    }
+
+    #[test]
+    fn liberar_un_token_permite_reintentar() {
+        let envios = EnviosRecientes::default();
+        let token = envios.nuevo_token();
+        assert!(envios.consumir(&token));
+        envios.liberar(&token);
+        assert!(envios.consumir(&token));
+    }
+
+    #[test]
+    fn cada_formulario_recibe_un_token_distinto() {
+        let envios = EnviosRecientes::default();
+        assert_ne!(envios.nuevo_token(), envios.nuevo_token());
+    }
+}
