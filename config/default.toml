@@ -1,6 +1,6 @@
 # Default configuration. Every value can be overridden with environment variables:
 #   KIOSCO_CONFIG          path to this file (default: config/default.toml)
-#   KIOSCO_SERVER_ADDRESS  e.g. 127.0.0.1:3000
+#   KIOSCO_SERVER_ADDRESS  e.g. 127.0.0.1:3200
 #   KIOSCO_DATABASE_PATH   e.g. /opt/cnsv-kiosco/database/database.db
 #   KIOSCO_BACKUP_DIR      e.g. /opt/cnsv-kiosco/database/backups
 #   KIOSCO_COOKIE_SECURE   true in production (HTTPS), so cookies carry `Secure`
