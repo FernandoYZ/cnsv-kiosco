@@ -11,7 +11,7 @@ pub fn page(title: &str, flash: Option<&str>, content: Markup) -> Markup {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover";
                 // Installable as a home-screen app (standalone, no browser bar), as the Go app.
-                meta name="theme-color" content="#4f46e5";
+                meta name="theme-color" content="#01398d";
                 meta name="mobile-web-app-capable" content="yes";
                 meta name="apple-mobile-web-app-capable" content="yes";
                 meta name="apple-mobile-web-app-status-bar-style" content="default";
