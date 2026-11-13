@@ -113,7 +113,6 @@ pub async fn ingresar(
     };
 
     state.auth.intentos.exito(&ip);
-    tracing::info!(id_usuario = sesion.id_usuario, "login");
     let valor = state
         .auth
         .llave
