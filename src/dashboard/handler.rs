@@ -197,10 +197,10 @@ fn vista(
 
                 div class="rounded-xl border border-gray-200 bg-white shadow-sm" {
                     div class="overflow-x-auto" {
-                        table class="min-w-full divide-y divide-gray-200" {
+                        table class="tabla-consumo min-w-full divide-y divide-gray-200" {
                             thead {
                                 tr class="bg-gray-50" {
-                                    th scope="col" class="w-48 bg-white px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase" { "Estudiante" }
+                                    th scope="col" class="nombre-estudiante w-48 bg-white px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase" { "Estudiante" }
                                     @for dia in dias {
                                         th scope="col" class="w-40 border-r border-gray-200 px-2 py-3 text-center text-xs font-medium tracking-wider text-gray-500 uppercase" { (fechas::corta(*dia)) }
                                     }
@@ -217,7 +217,7 @@ fn vista(
                                     @let fondo = if i % 2 == 0 { "bg-gray-50" } else { "bg-white" };
                                     @let id = fila.estudiante.id;
                                     tr class=(fondo) {
-                                        td class=(format!("w-48 px-4 py-3 text-sm font-medium text-gray-800 {fondo}")) {
+                                        td class=(format!("nombre-estudiante w-48 px-4 py-3 text-sm font-medium text-gray-800 {fondo}")) {
                                             div class="flex items-center justify-between gap-2" {
                                                 div class="flex-1 leading-tight break-words" { (fila.estudiante.nombre_completo()) }
                                                 a href=(url_comprobante(id, lunes, id_grado)) title="Ver comprobante semanal"
@@ -228,7 +228,7 @@ fn vista(
                                         }
                                         @for dia in dias {
                                             @let consumo = &fila.dias[fechas::indice_dia(*dia)];
-                                            td class="w-40 border-r border-gray-200 p-0 align-top text-sm text-gray-500" {
+                                            td class="p-0 text-sm text-gray-500 w-40 align-top border-r border-gray-200" {
                                                 a href=(format!("/consumos/{id}?fecha={}&grado={id_grado}", fechas::iso(*dia)))
                                                     class="flex h-full min-h-[180px] flex-col rounded-sm p-1 transition-colors hover:bg-blue-50" {
                                                     div class="grid flex-grow grid-cols-3 content-start gap-1" {
@@ -264,7 +264,7 @@ fn vista(
                             @if !filas.is_empty() {
                                 tfoot class="border-t-2 border-gray-300 bg-gray-100 text-sm font-bold text-gray-700" {
                                     tr {
-                                        td class="px-4 py-3" { (filas.len()) " estudiantes" }
+                                        td class="nombre-estudiante bg-gray-100 px-4 py-3" { (filas.len()) " estudiantes" }
                                         @for dia in dias {
                                             @let d = fechas::indice_dia(*dia);
                                             td class="border-r border-gray-200 px-2 py-3 text-center tabular-nums" {

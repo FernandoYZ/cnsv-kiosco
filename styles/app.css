@@ -134,6 +134,35 @@
     background-size: 1.25em 1.25em;
   }
 
+  /* Weekly table (same rules as the Go app): day columns never shrink on
+     phones and the student column stays pinned while scrolling sideways. */
+  .tabla-consumo {
+    font-size: 0.875rem;
+  }
+
+  @media (max-width: 640px) {
+    .tabla-consumo {
+      font-size: 0.75rem;
+    }
+  }
+
+  .tabla-consumo th.w-40,
+  .tabla-consumo td.w-40 {
+    width: 10rem;
+    min-width: 10rem;
+    max-width: 10rem;
+  }
+
+  .nombre-estudiante {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    width: 12rem;
+    min-width: 12rem;
+    max-width: 12rem;
+    box-shadow: 2px 0 5px -2px rgb(0 0 0 / 0.1);
+  }
+
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
