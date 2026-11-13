@@ -3,17 +3,13 @@ use axum::{
     extract::{Path, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
 };
-use maud::{Markup, html};
 use rust_embed::RustEmbed;
 use tower_http::trace::TraceLayer;
 
 use crate::{
-    db,
-    error::AppError,
-    state::AppState,
-    templates::{components, layout},
+    consumos, dashboard, db, error::AppError, estudiantes, pagos, productos, state::AppState,
 };
 
 /// Files under `public/`, embedded into the release binary.
@@ -23,22 +19,48 @@ struct PublicAssets;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
-        .route("/", get(home))
+        .route("/", get(dashboard::handler::index))
+        .route(
+            "/registro",
+            get(consumos::handler::registro).post(consumos::handler::guardar_registro),
+        )
+        .route("/resumen", get(consumos::handler::resumen))
+        .route(
+            "/estudiantes",
+            get(estudiantes::handler::listar).post(estudiantes::handler::crear),
+        )
+        .route("/estudiantes/{id}", post(estudiantes::handler::actualizar))
+        .route(
+            "/estudiantes/{id}/editar",
+            get(estudiantes::handler::editar),
+        )
+        .route(
+            "/estudiantes/{id}/estado",
+            post(estudiantes::handler::cambiar_estado),
+        )
+        .route(
+            "/productos",
+            get(productos::handler::listar).post(productos::handler::crear),
+        )
+        .route("/productos/{id}", post(productos::handler::actualizar))
+        .route("/productos/{id}/editar", get(productos::handler::editar))
+        .route(
+            "/productos/{id}/estado",
+            post(productos::handler::cambiar_estado),
+        )
+        .route(
+            "/pagos/{id_estudiante}",
+            get(pagos::handler::cuenta).post(pagos::handler::registrar),
+        )
+        .route(
+            "/pagos/{id_estudiante}/{id_pago}/eliminar",
+            post(pagos::handler::eliminar),
+        )
         .route("/health", get(health))
         .route("/public/{*path}", get(public_asset))
+        .fallback(|| async { AppError::NotFound })
         .layer(TraceLayer::new_for_http())
         .with_state(state)
-}
-
-/// Temporary page until the `dashboard` module exists.
-async fn home() -> Markup {
-    layout::page(
-        "Inicio",
-        html! {
-            (components::page_header("Kiosco CNSV"))
-            p { "Esqueleto del proyecto en funcionamiento." }
-        },
-    )
 }
 
 async fn health(State(state): State<AppState>) -> Result<&'static str, AppError> {

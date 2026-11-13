@@ -1,7 +1,14 @@
 mod app;
 mod config;
+mod consumos;
+mod dashboard;
 mod db;
 mod error;
+mod estudiantes;
+mod fechas;
+mod forms;
+mod pagos;
+mod productos;
 mod state;
 mod templates;
 
