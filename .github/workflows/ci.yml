@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  TAILWIND_VERSION: v4.1.10
+  # From the release's sha256sums.txt (tailwindcss-linux-x64).
+  TAILWIND_SHA256: 0a85a3e533f2e7983bdb91c08ea44f0eab3becc275e60b3baaddf18f71d390bf
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    # 22.04 (GLIBC 2.35) matches the release build; see release.yml.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (from rust-toolchain.toml)
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Tailwind CSS standalone CLI
+        run: |
+          curl -fsSL -o tailwindcss \
+            "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-x64"
+          echo "${TAILWIND_SHA256}  tailwindcss" | sha256sum -c -
+          chmod +x tailwindcss
+
+      # public/ is embedded in the binary, so the committed CSS must match styles/.
+      - name: Compiled CSS is up to date
+        run: |
+          ./tailwindcss -i styles/app.css -o public/css/app.css --minify
+          git diff --exit-code public/css/app.css
+
+      - run: cargo fmt --check
+      # --locked: fail instead of silently updating Cargo.lock.
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
