@@ -1,0 +1,156 @@
+name: Release
+
+# Pushing a tag vX.Y.Z that points to a commit on main builds the binary,
+# deploys it to the VPS (with automatic rollback) and publishes a GitHub Release.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+# Never run two deployments at the same time; never cancel one halfway.
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  TAILWIND_VERSION: v4.1.10
+  # From the release's sha256sums.txt (tailwindcss-linux-x64).
+  TAILWIND_SHA256: 0a85a3e533f2e7983bdb91c08ea44f0eab3becc275e60b3baaddf18f71d390bf
+  CARGO_TERM_COLOR: always
+  # Debian 12 on the VPS ships GLIBC 2.36: the binary must not need a newer one.
+  MAX_GLIBC: "2.36"
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: ci
+    # ubuntu-24.04 links against GLIBC 2.39, which does not run on Debian 12.
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Tag is a release version
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' is not vX.Y.Z"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag points to a commit on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag '$GITHUB_REF_NAME' is not on main"
+            exit 1
+          fi
+
+      - name: Install Rust toolchain (from rust-toolchain.toml)
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Tailwind CSS standalone CLI
+        run: |
+          curl -fsSL -o tailwindcss \
+            "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-x64"
+          echo "${TAILWIND_SHA256}  tailwindcss" | sha256sum -c -
+          chmod +x tailwindcss
+
+      - name: Build
+        run: |
+          ./tailwindcss -i styles/app.css -o public/css/app.css --minify
+          cargo build --release --locked
+
+      - name: Binary runs on the VPS GLIBC
+        run: |
+          needed=$(objdump -T target/release/cnsv-kiosco | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -Vu | tail -1)
+          if [[ -z "$needed" ]]; then
+            echo "::error::No GLIBC symbols found: cannot check compatibility"
+            exit 1
+          fi
+          echo "Highest GLIBC symbol: $needed (VPS: $MAX_GLIBC)"
+          if [[ "$(printf '%s\n%s\n' "$needed" "$MAX_GLIBC" | sort -V | tail -1)" != "$MAX_GLIBC" ]]; then
+            echo "::error::Binary needs GLIBC $needed, the VPS has $MAX_GLIBC"
+            exit 1
+          fi
+
+      - name: Package
+        run: |
+          mkdir dist
+          cp target/release/cnsv-kiosco dist/
+          (cd dist && sha256sum cnsv-kiosco > cnsv-kiosco.sha256)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cnsv-kiosco
+          path: dist/
+          retention-days: 7
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # Secrets live in the "production" environment (Settings → Environments).
+    environment: production
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: cnsv-kiosco
+
+      - name: Verify checksum
+        run: sha256sum -c cnsv-kiosco.sha256
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned host key: the connection fails if the VPS key is not this one.
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy to the VPS
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          ssh_opts=(-i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o BatchMode=yes)
+          port="${DEPLOY_PORT:-22}"
+          remote="/tmp/cnsv-kiosco-${GITHUB_REF_NAME}"
+          target="${DEPLOY_USER}@${DEPLOY_HOST}"
+          # The script installs, restarts, checks /health, rolls back on failure
+          # and always removes the upload.
+          if ! scp "${ssh_opts[@]}" -P "$port" cnsv-kiosco "${target}:${remote}" \
+            || ! ssh "${ssh_opts[@]}" -p "$port" "$target" sudo /usr/local/sbin/cnsv-kiosco-deploy "$remote"; then
+            # Best effort, for failures before the script ran (partial upload, lost connection).
+            ssh "${ssh_opts[@]}" -p "$port" "$target" rm -f "$remote" || true
+            exit 1
+          fi
+
+      # Re-running a tag whose release already exists replaces its assets
+      # instead of failing.
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" cnsv-kiosco cnsv-kiosco.sha256 \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" cnsv-kiosco cnsv-kiosco.sha256 \
+              --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+          fi
+
+      - name: Remove SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

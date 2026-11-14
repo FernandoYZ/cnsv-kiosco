@@ -71,6 +71,19 @@ cargo fmt                     # Formato
 cargo build --release         # Binario de producción: target/release/cnsv-kiosco
 ```
 
+### Integración continua y despliegue
+
+| Workflow | Cuándo corre | Qué hace |
+|----------|--------------|----------|
+| `.github/workflows/ci.yml` | Push a `main` y pull requests | Verifica que `public/css/app.css` esté compilado, `cargo fmt --check`, `clippy -D warnings` y `cargo test` |
+| `.github/workflows/release.yml` | Push de un tag `vX.Y.Z` que esté en `main` | CI, compila en Ubuntu 22.04 (compatible con Debian 12), despliega al VPS con reversión automática si `/health` falla y publica el binario en GitHub Releases |
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0   # Sale a producción
+```
+
+El despliegue usa los secretos `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_SSH_KEY` y `DEPLOY_KNOWN_HOSTS` del entorno `production` de GitHub.
+
 ### Base de datos
 
 - El esquema es el de la versión en Go, sin cambios de formato.
