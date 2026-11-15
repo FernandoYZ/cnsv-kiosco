@@ -109,6 +109,13 @@ impl Sector {
         }
     }
 
+    /// Sector that groups a grade (`None` for an unknown grade).
+    pub fn de_grado(id_grado: i64) -> Option<Self> {
+        [Sector::Menor, Sector::Mayor]
+            .into_iter()
+            .find(|s| s.ids().contains(&id_grado))
+    }
+
     pub fn grados(self) -> impl Iterator<Item = &'static Grado> {
         let ids = self.ids();
         GRADOS.iter().filter(move |g| ids.contains(&g.id))

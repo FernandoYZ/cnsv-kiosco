@@ -48,6 +48,21 @@ fn url_sector(sector: Sector, fecha: NaiveDate) -> String {
     format!("/registro/{}?fecha={}", sector.clave(), fecha)
 }
 
+/// Sector the editor returns to: the one in the URL or, when it was opened
+/// without sector or grade, the student's own sector — never Inicio, which a
+/// user without edit permission cannot open.
+fn sector_de_vuelta(
+    sector: Option<Sector>,
+    grado: Option<i64>,
+    id_grado_estudiante: Option<i64>,
+) -> Option<Sector> {
+    match (sector, grado) {
+        (Some(sector), _) => Some(sector),
+        (None, Some(_)) => None,
+        (None, None) => id_grado_estudiante.and_then(Sector::de_grado),
+    }
+}
+
 /// Where the editor returns: the sector list or the weekly table.
 fn url_volver(sector: Option<Sector>, grado: Option<i64>, fecha: NaiveDate) -> String {
     match (sector, grado) {
@@ -252,7 +267,12 @@ pub async fn editor(
         })
         .await?;
     let estudiante = estudiante.ok_or(AppError::NotFound)?;
-    let grado = grado_desde(q.grado.as_deref()).or(estudiante.id_grado);
+    let grado_url = grado_desde(q.grado.as_deref());
+    // Decided before defaulting the grade: opened without sector or grade, the
+    // editor returns to the student's sector list. The form's hidden `sector`
+    // carries it, so saving returns there too.
+    let sector = sector_de_vuelta(sector, grado_url, estudiante.id_grado);
+    let grado = grado_url.or(estudiante.id_grado);
     Ok(vista_editor(
         &estudiante,
         fecha,
@@ -296,6 +316,16 @@ pub async fn guardar(
         .await?
         .ok_or(AppError::NotFound)?;
 
+    let sector = match (sector, grado) {
+        (None, None) => {
+            let estudiante = state
+                .db
+                .call(move |c| crate::estudiantes::repository::por_id(c, id_estudiante))
+                .await?;
+            sector_de_vuelta(None, None, estudiante.and_then(|e| e.id_grado))
+        }
+        _ => sector,
+    };
     let destino = url_volver(sector, grado, fecha);
     Ok(Redirect::to(&format!("{destino}&ok=consumo")))
 }
