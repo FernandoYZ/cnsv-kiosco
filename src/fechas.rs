@@ -119,27 +119,45 @@ pub fn rango_semana(lunes: NaiveDate) -> (String, String) {
     )
 }
 
-/// `Semana del 26 al 31 de Octubre`
+/// `Semana del 26 al 31 de Octubre`, or
+/// `Semana del 30 de Noviembre al 5 de Diciembre` when the week crosses a month.
 pub fn etiqueta_semana(lunes: NaiveDate) -> String {
     let fin = sabado(lunes);
-    format!(
-        "Semana del {} al {} de {}",
-        lunes.day(),
-        fin.day(),
-        capitalizar(mes(fin))
-    )
+    if lunes.month() == fin.month() {
+        format!(
+            "Semana del {} al {} de {}",
+            lunes.day(),
+            fin.day(),
+            capitalizar(mes(fin))
+        )
+    } else {
+        format!(
+            "Semana del {} de {} al {} de {}",
+            lunes.day(),
+            capitalizar(mes(lunes)),
+            fin.day(),
+            capitalizar(mes(fin))
+        )
+    }
 }
 
-/// `26-31/Octubre/2026`, used in the receipt.
+/// `26-31/Octubre/2026` in the receipt; a week crossing a month shows both
+/// (`30/Noviembre-5/Diciembre/2026`), and crossing a year shows both years.
 pub fn periodo(lunes: NaiveDate) -> String {
     let fin = sabado(lunes);
-    format!(
-        "{}-{}/{}/{}",
-        lunes.day(),
-        fin.day(),
-        capitalizar(mes(fin)),
-        fin.year()
-    )
+    let hasta = format!("{}/{}/{}", fin.day(), capitalizar(mes(fin)), fin.year());
+    if lunes.year() != fin.year() {
+        format!(
+            "{}/{}/{}-{hasta}",
+            lunes.day(),
+            capitalizar(mes(lunes)),
+            lunes.year()
+        )
+    } else if lunes.month() != fin.month() {
+        format!("{}/{}-{hasta}", lunes.day(), capitalizar(mes(lunes)))
+    } else {
+        format!("{}-{hasta}", lunes.day())
+    }
 }
 
 #[cfg(test)]
@@ -327,14 +345,25 @@ mod tests {
         );
     }
 
-    // Weeks crossing two months: label and receipt period will show both months
-    // in v1.0.2, so only the single-month format is pinned here.
-    #[test]
-    fn etiqueta_y_periodo_de_una_semana_dentro_de_un_mes() {
-        assert_eq!(
-            etiqueta_semana(fecha(LUNES)),
-            "Semana del 9 al 14 de Noviembre"
-        );
-        assert_eq!(periodo(fecha(LUNES)), "9-14/Noviembre/2026");
+    #[rstest]
+    #[case::dentro_de_un_mes(LUNES, "Semana del 9 al 14 de Noviembre")]
+    #[case::cruza_mes("2026-11-30", "Semana del 30 de Noviembre al 5 de Diciembre")]
+    #[case::cruza_anio("2026-12-28", "Semana del 28 de Diciembre al 2 de Enero")]
+    fn la_etiqueta_muestra_ambos_meses_si_la_semana_cruza_de_mes(
+        #[case] lunes: &str,
+        #[case] esperado: &str,
+    ) {
+        assert_eq!(etiqueta_semana(fecha(lunes)), esperado);
+    }
+
+    #[rstest]
+    #[case::dentro_de_un_mes(LUNES, "9-14/Noviembre/2026")]
+    #[case::cruza_mes("2026-11-30", "30/Noviembre-5/Diciembre/2026")]
+    #[case::cruza_anio("2026-12-28", "28/Diciembre/2026-2/Enero/2027")]
+    fn el_periodo_del_comprobante_muestra_ambos_meses_si_la_semana_cruza_de_mes(
+        #[case] lunes: &str,
+        #[case] esperado: &str,
+    ) {
+        assert_eq!(periodo(fecha(lunes)), esperado);
     }
 }
