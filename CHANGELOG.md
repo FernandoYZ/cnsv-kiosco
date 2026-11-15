@@ -4,6 +4,19 @@ Cambios de cada versión, pensados para quien usa el sistema. Formato basado en 
 
 La sección de cada versión se publica tal cual como notas de la Release en GitHub: sin ella, la versión no se despliega.
 
+## [Sin publicar]
+
+### Corregido
+
+- **Semanas que cruzan de mes.** Una semana como la del 30 de noviembre al 5 de diciembre aparecía como «30-5/Diciembre/2026». Ahora muestra los dos meses, tanto en Pagos («Semana del 30 de Noviembre al 5 de Diciembre») como en el comprobante («30/Noviembre-5/Diciembre/2026»), y también los dos años cuando la semana cruza de año.
+- **Saber qué día se está tocando en el celular.** En la tabla semanal, al bajar por la lista los días de las columnas quedaban fuera de la pantalla. Ahora cada celda muestra su día (por ejemplo «Mar 10/11») en el celular; en la computadora se sigue viendo solo el encabezado.
+- **Nombres de productos partidos.** En la tabla semanal, nombres como «Salchipapa» o «Chicharrón» se cortaban a mitad de palabra («Salchipap / a»). Ahora cada celda muestra los productos en dos columnas y los nombres se leen enteros.
+- **Pagar de más ya no deja montos negativos.** Si un estudiante abonaba más de lo que debía, el comprobante decía «Total a pagar: S/ -2.00» y la semana siguiente mostraba una deuda anterior negativa. Ahora el comprobante dice «Saldo a favor: S/ 2.00», la semana siguiente lo descuenta como «Saldo a favor anterior», y la tabla semanal y la página de pagos lo muestran como «S/ 2.00 a favor», en verde.
+
+### Cambiado
+
+- **Columnas de cuenta sin nada que cobrar, en gris azulado.** En la tabla semanal, Subtotal y Deuda anterior solo se resaltan en naranja cuando hay algo que cobrar, y Pagos solo en amarillo cuando hay deuda; si no, se ven en un gris azulado que se distingue de los días.
+
 ## [1.0.2] - 2026-11-15
 
 ### Corregido
