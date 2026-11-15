@@ -100,16 +100,18 @@ Los tests cubren las reglas de negocio (pagos sin duplicados, consumos transacci
 | Workflow | Se ejecuta con | Qué hace |
 |----------|----------------|----------|
 | [`ci.yml`](.github/workflows/ci.yml) | Push a `main` y pull requests | Verifica que el CSS compilado esté al día, `cargo fmt --check`, `clippy -D warnings` y `cargo test` |
-| [`release.yml`](.github/workflows/release.yml) | Push de un tag `vX.Y.Z` que esté en `main` | Corre el CI, compila en Ubuntu 22.04 (compatible con Debian 12), despliega en el servidor con reversión automática si `/health` falla y publica el binario en GitHub Releases |
+| [`release.yml`](.github/workflows/release.yml) | Push de un tag `vX.Y.Z` que esté en `main` | Toma las notas de `CHANGELOG.md`, corre el CI, compila en Ubuntu 22.04 (compatible con Debian 12), despliega en el servidor con reversión automática si `/health` falla y publica la Release con esas notas |
 
 **Publicar una versión:**
 
-1. Actualiza `version` en `Cargo.toml` y haz commit en `main` (`chore: release vX.Y.Z`).
-2. Espera a que el CI pase en verde.
-3. Crea y sube el tag:
+1. En `develop`, agrega la sección `## [X.Y.Z] - AAAA-MM-DD` en [`CHANGELOG.md`](CHANGELOG.md): qué se corrige y qué se agrega para quien usa el sistema (sin tests ni detalles internos). Es el texto de la Release; sin esa sección, la versión no se despliega.
+2. Actualiza `version` en `Cargo.toml` y haz commit (`chore: release vX.Y.Z`).
+3. Integra `develop` en `main` (`git merge --ff-only develop`), sube `main` y espera a que el CI pase en verde.
+4. Crea el tag sobre `main` y súbelo en un comando aparte, porque el push despliega:
 
    ```bash
-   git tag vX.Y.Z && git push origin vX.Y.Z
+   git tag vX.Y.Z main
+   git push origin vX.Y.Z
    ```
 
 El despliegue reinicia el servicio, así que se cierran las sesiones abiertas: conviene publicar fuera del horario de atención. Usa los secretos `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_SSH_KEY` y `DEPLOY_KNOWN_HOSTS` del entorno `production` de GitHub.

@@ -50,6 +50,22 @@ jobs:
             exit 1
           fi
 
+      # Release notes are the CHANGELOG.md section of this version. Checked
+      # before building: a version without notes is never deployed.
+      - name: Release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v heading="## [${version}]" '
+            /^## \[/ { if (found) exit; found = (index($0, heading) == 1); next }
+            /^\[[^]]+\]: / { exit }  # link references at the end of the file
+            found
+          ' CHANGELOG.md > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "::error::CHANGELOG.md has no section for ${version} (expected a heading '## [${version}] - YYYY-MM-DD')"
+            exit 1
+          fi
+          cat release-notes.md
+
       - name: Install Rust toolchain (from rust-toolchain.toml)
         run: rustup toolchain install
 
@@ -83,7 +99,7 @@ jobs:
       - name: Package
         run: |
           mkdir dist
-          cp target/release/cnsv-kiosco dist/
+          cp target/release/cnsv-kiosco release-notes.md dist/
           (cd dist && sha256sum cnsv-kiosco > cnsv-kiosco.sha256)
 
       - uses: actions/upload-artifact@v7
@@ -137,8 +153,8 @@ jobs:
             exit 1
           fi
 
-      # Re-running a tag whose release already exists replaces its assets
-      # instead of failing.
+      # Notes come from CHANGELOG.md (see the build job). Re-running a tag
+      # whose release already exists replaces its assets and notes.
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -146,9 +162,10 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" cnsv-kiosco cnsv-kiosco.sha256 \
               --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --notes-file release-notes.md
           else
             gh release create "$GITHUB_REF_NAME" cnsv-kiosco cnsv-kiosco.sha256 \
-              --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+              --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --notes-file release-notes.md
           fi
 
       - name: Remove SSH key
