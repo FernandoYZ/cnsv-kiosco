@@ -61,6 +61,7 @@ pub async fn listar(
         q.editar,
         mensaje_flash(q.ok.as_deref()),
         volver,
+        sesion.puede_editar,
     ))
 }
 
@@ -108,7 +109,7 @@ pub async fn cambiar_estado(
     Ok(Redirect::to("/productos?ok=producto-estado"))
 }
 
-fn fila(p: &Producto) -> Markup {
+fn fila(p: &Producto, puede_editar: bool) -> Markup {
     html! {
         div class="flex items-center justify-between gap-2 p-4 transition-colors hover:bg-gray-50" {
             div class="flex min-w-0 items-center gap-4" {
@@ -124,15 +125,18 @@ fn fila(p: &Producto) -> Markup {
                     }
                 }
             }
-            div class="flex shrink-0 items-center gap-1" {
-                a href=(format!("/productos?editar={}#p{}", p.id, p.id)) data-replace class="btn-text text-ios-blue hover:bg-blue-50" { "Editar" }
-                form method="post" action=(format!("/productos/{}/estado", p.id))
-                    data-confirm=[p.esta_activo.then(|| format!("¿Deshabilitar {}?", p.nombre))] {
-                    input type="hidden" name="activo" value=(if p.esta_activo { "0" } else { "1" });
-                    @if p.esta_activo {
-                        button type="submit" class="btn-text text-ios-red hover:bg-red-50" { "Desactivar" }
-                    } @else {
-                        button type="submit" class="btn-text text-ios-green hover:bg-green-50" { "Activar" }
+            // Users without edit permission only see the catalog: the server rejects these actions.
+            @if puede_editar {
+                div class="flex shrink-0 items-center gap-1" {
+                    a href=(format!("/productos?editar={}#p{}", p.id, p.id)) data-replace class="btn-text text-ios-blue hover:bg-blue-50" { "Editar" }
+                    form method="post" action=(format!("/productos/{}/estado", p.id))
+                        data-confirm=[p.esta_activo.then(|| format!("¿Deshabilitar {}?", p.nombre))] {
+                        input type="hidden" name="activo" value=(if p.esta_activo { "0" } else { "1" });
+                        @if p.esta_activo {
+                            button type="submit" class="btn-text text-ios-red hover:bg-red-50" { "Desactivar" }
+                        } @else {
+                            button type="submit" class="btn-text text-ios-green hover:bg-green-50" { "Activar" }
+                        }
                     }
                 }
             }
@@ -166,7 +170,13 @@ fn fila_edicion(p: &Producto) -> Markup {
     }
 }
 
-fn vista(productos: &[Producto], editar: Option<i64>, flash: Option<&str>, volver: &str) -> Markup {
+fn vista(
+    productos: &[Producto],
+    editar: Option<i64>,
+    flash: Option<&str>,
+    volver: &str,
+    puede_editar: bool,
+) -> Markup {
     let activos = productos.iter().filter(|p| p.esta_activo).count();
     layout::page(
         "Productos",
@@ -176,6 +186,7 @@ fn vista(productos: &[Producto], editar: Option<i64>, flash: Option<&str>, volve
             main class="mx-auto max-w-2xl px-4 pt-6 pb-10 lg:max-w-6xl" {
                 (encabezado("Productos", "Catálogo general del kiosco"))
                 div class="lg:grid lg:grid-cols-12 lg:items-start lg:gap-10" {
+                    @if puede_editar {
                     aside class="mb-10 lg:sticky lg:top-24 lg:col-span-5 lg:mb-0" {
                         h3 class="section-title font-medium" { "Nuevo producto" }
                         div class="ios-card" {
@@ -198,7 +209,9 @@ fn vista(productos: &[Producto], editar: Option<i64>, flash: Option<&str>, volve
                             }
                         }
                     }
-                    section class="lg:col-span-7" {
+                    }
+                    // Without the side panel the list takes the full width.
+                    section class=(if puede_editar { "lg:col-span-7" } else { "lg:col-span-12" }) {
                         div class="mb-3 flex items-center justify-between px-4" {
                             h3 class="text-[13px] font-medium tracking-wide text-ios-gray uppercase" { "Productos registrados" }
                             span class="badge bg-indigo-50 text-indigo-600" { (activos) " activos de " (productos.len()) }
@@ -210,7 +223,7 @@ fn vista(productos: &[Producto], editar: Option<i64>, flash: Option<&str>, volve
                                 div class="divide-y divide-gray-200/70" {
                                     @for p in productos {
                                         div id=(format!("p{}", p.id)) class="scroll-mt-24" {
-                                            @if editar == Some(p.id) { (fila_edicion(p)) } @else { (fila(p)) }
+                                            @if puede_editar && editar == Some(p.id) { (fila_edicion(p)) } @else { (fila(p, puede_editar)) }
                                         }
                                     }
                                 }

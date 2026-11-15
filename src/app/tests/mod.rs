@@ -8,6 +8,7 @@ mod login;
 mod logout;
 mod pagos;
 mod permisos;
+mod productos;
 mod proteccion_csrf;
 mod reportes;
 
