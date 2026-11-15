@@ -29,4 +29,5 @@ strip = true
 codegen-units = 1
 
 [dev-dependencies]
+rstest = "0.28.0"
 tower = { version = "0.5.3", features = ["util"] }
