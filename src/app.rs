@@ -81,7 +81,7 @@ pub fn router(state: AppState) -> Router {
             "/login",
             get(auth::handler::mostrar).post(auth::handler::ingresar),
         )
-        .route("/logout", get(auth::handler::salir))
+        .route("/logout", post(auth::handler::salir))
         .route("/health", get(health))
         .fallback(|| async { AppError::NotFound })
         // Every dynamic route: CSRF cookie and POST token check.
@@ -610,7 +610,7 @@ mod tests {
                 .any(|c| c.starts_with("kiosco_session=;") && c.contains("Max-Age=0"))
         );
 
-        let salir = enviar(&app, get(&anonimo(), "/logout")).await;
+        let salir = enviar(&app, post(&anonimo(), "/logout", String::new())).await;
         assert_eq!(salir.status(), StatusCode::SEE_OTHER);
         assert_eq!(cabecera(&salir, header::LOCATION), "/login");
         assert!(
@@ -971,7 +971,7 @@ mod tests {
                 StatusCode::NOT_FOUND
             );
         }
-        let salir = enviar(&app, get(&s, "/logout")).await;
+        let salir = enviar(&app, post(&s, "/logout", String::new())).await;
         assert_eq!(redirige_a(&salir), Some("/login"));
         let borrada = set_cookies(&salir)
             .into_iter()
@@ -984,8 +984,68 @@ mod tests {
 
         for ruta in ["/", "/registro"] {
             let html = texto(enviar(&app, get(&s, ruta)).await).await;
-            assert!(html.contains(r#"href="/logout""#), "logout link on {ruta}");
+            assert!(
+                html.contains(r#"action="/logout""#),
+                "logout form on {ruta}"
+            );
         }
+    }
+
+    /// True when the response deletes the session cookie (logs the user out).
+    fn sesion_borrada(respuesta: &Response) -> bool {
+        set_cookies(respuesta)
+            .iter()
+            .any(|c| c.starts_with("kiosco_session=;") && c.contains("Max-Age=0"))
+    }
+
+    /// POST /logout with the session cookie and an optional CSRF header.
+    fn salir_con_token(cookies: &str, token: Option<&str>) -> Request<Body> {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/logout")
+            .header(header::COOKIE, cookies)
+            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded");
+        if let Some(token) = token {
+            request = request.header(csrf::CABECERA, token);
+        }
+        request.body(Body::empty()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn salir_por_get_no_cierra_la_sesion() {
+        // A link or an <img src="/logout"> on another site must not log anyone out.
+        let estado = estado().await;
+        let s = editor(&estado);
+        let respuesta = enviar(&router(estado), get(&s, "/logout")).await;
+        assert_eq!(respuesta.status(), StatusCode::METHOD_NOT_ALLOWED);
+        assert!(!sesion_borrada(&respuesta));
+    }
+
+    #[tokio::test]
+    async fn salir_sin_token_csrf_no_cierra_la_sesion() {
+        let estado = estado().await;
+        let s = editor(&estado);
+        let respuesta = enviar(&router(estado), salir_con_token(&s, None)).await;
+        assert_eq!(respuesta.status(), StatusCode::FORBIDDEN);
+        assert!(!sesion_borrada(&respuesta));
+    }
+
+    #[tokio::test]
+    async fn salir_con_token_csrf_incorrecto_no_cierra_la_sesion() {
+        let estado = estado().await;
+        let s = editor(&estado);
+        let respuesta = enviar(&router(estado), salir_con_token(&s, Some("otro-token"))).await;
+        assert_eq!(respuesta.status(), StatusCode::FORBIDDEN);
+        assert!(!sesion_borrada(&respuesta));
+    }
+
+    #[tokio::test]
+    async fn salir_con_token_csrf_cierra_la_sesion_y_vuelve_al_login() {
+        let estado = estado().await;
+        let s = editor(&estado);
+        let respuesta = enviar(&router(estado), salir_con_token(&s, Some(CSRF))).await;
+        assert_eq!(redirige_a(&respuesta), Some("/login"));
+        assert!(sesion_borrada(&respuesta));
     }
 
     #[tokio::test]
@@ -1037,7 +1097,7 @@ mod tests {
         for ruta in ["/registro", "/productos"] {
             let html = texto(enviar(&app, get(&kiosco, ruta)).await).await;
             assert!(!html.contains(r#"href="/""#), "{ruta} links to Inicio");
-            assert!(html.contains(r#"href="/logout""#) || ruta != "/registro");
+            assert!(html.contains(r#"action="/logout""#) || ruta != "/registro");
         }
         let html = texto(enviar(&app, get(&jenny, "/registro")).await).await;
         assert!(

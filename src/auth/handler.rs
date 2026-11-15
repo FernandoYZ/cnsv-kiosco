@@ -128,7 +128,8 @@ pub async fn ingresar(
     Ok(respuesta)
 }
 
-/// `GET /logout` (as in Go).
+/// `POST /logout`, CSRF-checked like every POST: a cross-site link or image
+/// can no longer log a user out (the Go app used `GET`).
 pub async fn salir(State(state): State<AppState>) -> Response {
     let borrar = state.auth.cookie(sesion::COOKIE, "", Some(0), true);
     let mut respuesta = Redirect::to("/login").into_response();

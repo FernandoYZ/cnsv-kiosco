@@ -97,8 +97,10 @@ pub async fn inicio(Extension(sesion): Extension<Sesion>) -> Markup {
                                 (icono(Icono::Inicio, "ml-2 h-5 w-5"))
                             }
                         }
-                        a href="/logout" class="inline-flex items-center gap-1.5 text-[15px] font-medium text-ios-gray" {
-                            (icono(Icono::Salir, "h-5 w-5")) span { "Salir" }
+                        form method="post" action="/logout" class="contents" {
+                            button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 text-[15px] font-medium text-ios-gray" {
+                                (icono(Icono::Salir, "h-5 w-5")) span { "Salir" }
+                            }
                         }
                     }
                 }
