@@ -17,7 +17,7 @@ use crate::{
     fechas, forms, rutas,
     state::AppState,
     templates::{
-        components::{Icono, estado_vacio, icono, mensaje_flash, monto, soles},
+        components::{Icono, a_favor, estado_vacio, icono, mensaje_flash, monto, saldo, soles},
         layout,
     },
 };
@@ -214,7 +214,7 @@ fn vista_gestion(semana: &Semana, grado: Option<i64>, token: &str, flash: Option
                     h2 class="hidden truncate px-4 text-[17px] font-semibold sm:block" { "Gestión de Pagos" }
                     div class="flex items-center gap-2" {
                         span class="text-[13px] font-semibold tracking-wider text-ios-gray uppercase" { "Saldo:" }
-                        span class=(format!("text-[17px] font-bold tabular-nums {}", color_saldo(total))) { (soles(total)) }
+                        span class=(format!("text-[17px] font-bold tabular-nums {}", color_saldo(total))) { (saldo(total, false)) }
                     }
                 }
             }
@@ -258,11 +258,17 @@ fn vista_gestion(semana: &Semana, grado: Option<i64>, token: &str, flash: Option
                         }
                         div class="mt-6 hidden space-y-2 rounded-3xl border border-gray-200 bg-white p-5 text-[15px] lg:block" {
                             div class="flex justify-between" { span class="text-gray-500" { "Consumo de la semana" } span class="font-semibold tabular-nums" { (soles(semana.subtotal())) } }
-                            div class="flex justify-between" { span class="text-gray-500" { "Deuda anterior" } span class="font-semibold tabular-nums" { (soles(semana.deuda_anterior)) } }
+                            div class="flex justify-between" {
+                                @if a_favor(semana.deuda_anterior) {
+                                    span class="text-gray-500" { "Saldo a favor anterior" } span class="font-semibold tabular-nums text-ios-green" { "- " (soles(-semana.deuda_anterior)) }
+                                } @else {
+                                    span class="text-gray-500" { "Deuda anterior" } span class="font-semibold tabular-nums" { (soles(semana.deuda_anterior)) }
+                                }
+                            }
                             div class="flex justify-between" { span class="text-gray-500" { "Pagos de la semana" } span class="font-semibold tabular-nums" { "- " (soles(pagado)) } }
                             div class="flex items-center justify-between border-t border-gray-100 pt-2" {
                                 span class="font-medium text-gray-700" { "Saldo actual" }
-                                span class=(format!("text-[20px] font-black tabular-nums {}", color_saldo(total))) { (soles(total)) }
+                                span class=(format!("text-[20px] font-black tabular-nums {}", color_saldo(total))) { (saldo(total, false)) }
                             }
                         }
                     }
@@ -346,7 +352,11 @@ fn vista_comprobante(semana: &Semana, volver: &str) -> Markup {
                         // Shares the receipt image (WhatsApp, etc.) where the browser supports it.
                         button type="button" data-share-receipt hidden
                             data-file-name=(format!("nota-venta-{nombre}.png"))
-                            data-caption=(format!("Nota de venta semanal de {} – Kiosco del Valle. Total a pagar: {}", semana.estudiante.nombres, soles(semana.total())))
+                            data-caption=(if a_favor(semana.total()) {
+                                format!("Nota de venta semanal de {} – Kiosco del Valle. Saldo a favor: {}", semana.estudiante.nombres, soles(-semana.total()))
+                            } else {
+                                format!("Nota de venta semanal de {} – Kiosco del Valle. Total a pagar: {}", semana.estudiante.nombres, soles(semana.total()))
+                            })
                             class="flex items-center gap-2 rounded-lg border border-green-700/20 bg-gradient-to-b from-green-500 to-green-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-all duration-150 active:scale-95 disabled:opacity-60" {
                             span { "📤 Compartir" }
                         }
@@ -405,11 +415,22 @@ fn vista_comprobante(semana: &Semana, volver: &str) -> Markup {
                     div class="px-4 pb-3" {
                         div class="space-y-1.5 rounded border-2 border-gray-800 bg-white p-3 text-xs" {
                             div class="flex justify-between py-0.5" { span class="font-medium text-gray-700 uppercase" { "Subtotal semana:" } span class="font-bold text-gray-900 tabular-nums" { (soles(semana.subtotal())) } }
-                            div class="flex justify-between py-0.5" { span class="font-medium text-gray-700 uppercase" { "Deuda anterior:" } span class="font-bold text-gray-900 tabular-nums" { (soles(semana.deuda_anterior)) } }
+                            div class="flex justify-between py-0.5" {
+                                @if a_favor(semana.deuda_anterior) {
+                                    span class="font-medium text-gray-700 uppercase" { "Saldo a favor anterior:" } span class="font-bold text-gray-900 tabular-nums" { "- " (soles(-semana.deuda_anterior)) }
+                                } @else {
+                                    span class="font-medium text-gray-700 uppercase" { "Deuda anterior:" } span class="font-bold text-gray-900 tabular-nums" { (soles(semana.deuda_anterior)) }
+                                }
+                            }
                             div class="flex justify-between py-0.5" { span class="font-medium text-gray-700 uppercase" { "Pagos realizados:" } span class="font-bold text-gray-900 tabular-nums" { "- " (soles(semana.pagado())) } }
                             div class="mt-2 flex items-center justify-between border-t-2 border-gray-800 pt-2" {
-                                span class="text-sm font-bold text-gray-900 uppercase" { "Total a pagar:" }
-                                span class="text-lg font-black text-gray-900 tabular-nums" { (soles(semana.total())) }
+                                @if a_favor(semana.total()) {
+                                    span class="text-sm font-bold text-gray-900 uppercase" { "Saldo a favor:" }
+                                    span class="text-lg font-black text-gray-900 tabular-nums" { (soles(-semana.total())) }
+                                } @else {
+                                    span class="text-sm font-bold text-gray-900 uppercase" { "Total a pagar:" }
+                                    span class="text-lg font-black text-gray-900 tabular-nums" { (soles(semana.total())) }
+                                }
                             }
                         }
                     }

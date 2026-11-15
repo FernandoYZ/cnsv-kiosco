@@ -100,6 +100,29 @@ pub fn es_cero(valor: f64) -> bool {
     (valor * 100.0).round() == 0.0
 }
 
+/// A negative balance is money in the student's favor (they paid more than
+/// they consumed); it is shown as a positive amount labelled «a favor».
+pub fn a_favor(valor: f64) -> bool {
+    (valor * 100.0).round() < 0.0
+}
+
+/// Balance as `S/ 12.50`, or `S/ 2.00 a favor` when it is negative. `apilado`
+/// puts «a favor» on its own line (narrow table cells).
+pub fn saldo(valor: f64, apilado: bool) -> Markup {
+    html! {
+        @if a_favor(valor) {
+            (soles(-valor))
+            @if apilado {
+                span class="block text-[10px] font-semibold uppercase" { "a favor" }
+            } @else {
+                " " span class="text-[0.75em] font-semibold" { "a favor" }
+            }
+        } @else {
+            (soles(valor))
+        }
+    }
+}
+
 /// Sticky top bar: back link, centered title and an optional right slot.
 pub fn ios_nav(atras: (&str, &str), titulo: &str, derecha: Markup) -> Markup {
     html! {

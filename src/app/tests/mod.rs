@@ -4,6 +4,7 @@
 mod consumos;
 mod estaticos;
 mod fechas_url;
+mod inicio;
 mod login;
 mod logout;
 mod pagos;

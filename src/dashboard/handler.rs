@@ -13,7 +13,9 @@ use crate::{
     fechas, rutas,
     state::AppState,
     templates::{
-        components::{Icono, bottom_nav, es_cero, icono, mensaje_flash, monto, soles},
+        components::{
+            Icono, a_favor, bottom_nav, es_cero, icono, mensaje_flash, monto, saldo, soles,
+        },
         layout,
     },
 };
@@ -114,6 +116,25 @@ fn agregar<'a>(dias: &mut [Dia<'a>; 7], linea: &'a LineaSemana) {
 
 fn suma<'a>(filas: &'a [Fila<'a>], valor: impl Fn(&'a Fila<'a>) -> f64) -> f64 {
     filas.iter().map(valor).sum()
+}
+
+/// "Nothing to collect" tone for the balance columns: slate, so it does not
+/// blend with the gray/white rows of the day cells.
+const SIN_MONTO: &str = "bg-slate-100 text-slate-400";
+
+/// Subtotal / previous-balance cell: orange only when there is an amount to
+/// collect, muted at zero and green when the balance is in the student's favor.
+fn celda_monto(valor: f64) -> Markup {
+    let color = if es_cero(valor) {
+        SIN_MONTO
+    } else if a_favor(valor) {
+        "bg-green-50 text-green-700"
+    } else {
+        "bg-orange-50 text-orange-700"
+    };
+    html! {
+        td class=(format!("w-20 {color} px-2 py-4 text-right text-sm font-semibold whitespace-nowrap")) { (saldo(valor, true)) }
+    }
 }
 
 fn cabecera(lunes: NaiveDate, id_grado: i64) -> Markup {
@@ -238,7 +259,9 @@ fn vista(
                                             td class="p-0 text-sm text-gray-500 w-40 align-top border-r border-gray-200" {
                                                 a href=(format!("/consumos/{id}?fecha={}&grado={id_grado}", *dia))
                                                     class="flex h-full min-h-[180px] flex-col rounded-sm p-1 transition-colors hover:bg-blue-50" {
-                                                    div class="grid flex-grow grid-cols-3 content-start gap-1" {
+                                                    // The header row scrolls out of view on phones, so each cell names its day.
+                                                    span class="mb-1 shrink-0 rounded bg-blue-50 py-0.5 text-center text-[10px] font-semibold tracking-wide text-blue-700 uppercase sm:hidden" { (fechas::corta(*dia)) }
+                                                    div class="grid flex-grow grid-cols-2 content-start gap-1" {
                                                         @for (producto, cantidad) in &consumo.productos {
                                                             div class="flex h-fit flex-col items-center rounded bg-gray-50 p-0.5" {
                                                                 span class="w-full text-center text-[9px] font-medium break-words text-gray-700" { (producto) }
@@ -255,15 +278,17 @@ fn vista(
                                                 }
                                             }
                                         }
-                                        td class="w-20 bg-orange-50 px-2 py-4 text-right text-sm font-semibold whitespace-nowrap text-orange-700" { (soles(fila.subtotal())) }
-                                        td class="w-20 bg-orange-50 px-2 py-4 text-right text-sm font-semibold whitespace-nowrap text-orange-700" { (soles(fila.deuda)) }
-                                        td class="w-20 bg-amber-100 px-2 py-4 text-right text-sm font-semibold whitespace-nowrap text-red-800" {
-                                            a href=(rutas::pagos(id, lunes, Some(id_grado))) class="block rounded px-2 py-1 transition-colors hover:bg-amber-200" {
+                                        (celda_monto(fila.subtotal()))
+                                        (celda_monto(fila.deuda))
+                                        // Without payments and with nothing owed (no consumption, no previous debt) there is nothing to flag.
+                                        @let sin_deuda = es_cero(fila.pagos) && es_cero(fila.subtotal()) && fila.deuda <= 0.005;
+                                        td class=(if sin_deuda { format!("w-20 {SIN_MONTO} px-2 py-4 text-right text-sm font-semibold whitespace-nowrap") } else { "w-20 bg-amber-100 px-2 py-4 text-right text-sm font-semibold whitespace-nowrap text-red-800".to_owned() }) {
+                                            a href=(rutas::pagos(id, lunes, Some(id_grado))) class=(if sin_deuda { "block rounded px-2 py-1 transition-colors hover:bg-slate-200" } else { "block rounded px-2 py-1 transition-colors hover:bg-amber-200" }) {
                                                 @if es_cero(fila.pagos) { "-" } @else { (soles(fila.pagos)) }
                                             }
                                         }
                                         td class=(if fila.total() > 0.005 { "w-20 bg-red-100 px-2 py-4 text-right text-sm font-extrabold whitespace-nowrap text-red-700" } else { "w-20 bg-green-50 px-2 py-4 text-right text-sm font-extrabold whitespace-nowrap text-green-700" }) {
-                                            (soles(fila.total()))
+                                            (saldo(fila.total(), true))
                                         }
                                     }
                                 }
@@ -279,9 +304,9 @@ fn vista(
                                             }
                                         }
                                         td class="px-2 py-3 text-right whitespace-nowrap" { (soles(suma(filas, Fila::subtotal))) }
-                                        td class="px-2 py-3 text-right whitespace-nowrap" { (soles(suma(filas, |f| f.deuda))) }
+                                        td class="px-2 py-3 text-right whitespace-nowrap" { (saldo(suma(filas, |f| f.deuda), true)) }
                                         td class="px-2 py-3 text-right whitespace-nowrap" { (soles(suma(filas, |f| f.pagos))) }
-                                        td class="px-2 py-3 text-right whitespace-nowrap" { (soles(suma(filas, Fila::total))) }
+                                        td class="px-2 py-3 text-right whitespace-nowrap" { (saldo(suma(filas, Fila::total), true)) }
                                     }
                                 }
                             }
