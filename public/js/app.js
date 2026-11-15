@@ -123,9 +123,12 @@
     const target = new URL(response.url);
     const here = withoutOk(location.href);
     const referrer = document.referrer ? withoutOk(document.referrer) : null;
+    // Leaving the session never goes back: after login the /login entry was
+    // replaced, so the previous history entry may be outside the app.
+    const leavingSession = target.pathname === '/login';
 
-    if (target.pathname !== here.pathname && referrer && referrer.origin === here.origin
-        && referrer.pathname === target.pathname) {
+    if (!leavingSession && target.pathname !== here.pathname && referrer
+        && referrer.origin === here.origin && referrer.pathname === target.pathname) {
       const text = new DOMParser().parseFromString(html, 'text/html').querySelector('[data-toast]');
       try { if (text) sessionStorage.setItem(TOAST_KEY, text.textContent.trim()); } catch (_) { /* ignore */ }
       history.back();
