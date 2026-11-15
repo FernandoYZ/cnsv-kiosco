@@ -133,6 +133,7 @@ El despliegue reinicia el servicio, así que se cierran las sesiones abiertas: c
 | Contraseñas | Argon2id, verificadas con los parámetros de cada hash (compatibles con los de Go) |
 | Sesión | Cookie `kiosco_session` firmada con HMAC-SHA256, válida 24 h, `HttpOnly` y `SameSite=Lax`. La llave cambia en cada reinicio, así que reiniciar cierra todas las sesiones |
 | CSRF | Cookie `kiosco_csrf` comparada con la cabecera `X-CSRF-Token` (la envía `app.js`) o con el campo `csrf_token` en cada POST |
+| Cierre de sesión | Solo `POST /logout` con token CSRF: un enlace o una imagen en otro sitio no puede cerrar la sesión. `GET /logout` responde `405` |
 | Intentos de login | 5 fallos en 15 minutos por IP; un acierto reinicia el contador |
 | Caché | Las páginas se sirven con `no-store`; los estáticos, versionados e inmutables |
 
