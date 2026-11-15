@@ -4,7 +4,7 @@ Cambios de cada versión, pensados para quien usa el sistema. Formato basado en 
 
 La sección de cada versión se publica tal cual como notas de la Release en GitHub: sin ella, la versión no se despliega.
 
-## [Sin publicar]
+## [1.0.3] - 2026-11-15
 
 ### Corregido
 
@@ -50,6 +50,7 @@ Primera versión en Rust: reemplaza a la aplicación en Go sobre la misma base d
 - Inicio de sesión con dos niveles de permiso y límite de intentos.
 - Aplicación instalable en Android (PWA) y copia diaria automática de la base de datos.
 
+[1.0.3]: https://github.com/FernandoYZ/cnsv-kiosco/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/FernandoYZ/cnsv-kiosco/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/FernandoYZ/cnsv-kiosco/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/FernandoYZ/cnsv-kiosco/releases/tag/v1.0.0
